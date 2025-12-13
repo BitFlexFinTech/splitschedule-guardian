@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { APP_CONFIG } from '@/lib/config';
 import { 
   Video, Phone, PhoneOff, Mic, MicOff, 
   VideoOff, Clock, Calendar, Users 
@@ -31,22 +33,90 @@ const Calls: React.FC = () => {
   const [isInCall, setIsInCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [callType, setCallType] = useState<'video' | 'audio'>('video');
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleStartCall = (type: 'video' | 'audio') => {
+  useEffect(() => {
+    if (isInCall) {
+      timerRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setCallDuration(0);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isInCall]);
+
+  const handleStartCall = async (type: 'video' | 'audio') => {
     if (!profile?.family_id) {
       toast.error('Please set up your family first');
       return;
     }
     
-    toast.info(`Starting ${type} call... (WebRTC not configured yet)`);
+    setCallType(type);
     setIsInCall(true);
+    toast.success(`${type === 'video' ? 'Video' : 'Audio'} call started${APP_CONFIG.MOCK_MODE ? ' (Mock Mode)' : ''}`);
+
+    // Save call to database
+    if (profile.family_id && user) {
+      try {
+        await supabase
+          .from('call_sessions')
+          .insert({
+            family_id: profile.family_id,
+            call_type: type,
+            initiated_by: user.id,
+            participants: [user.id],
+            status: 'active',
+          });
+      } catch (error) {
+        console.error('Error saving call session:', error);
+      }
+    }
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = async () => {
+    const duration = callDuration;
     setIsInCall(false);
     setIsMuted(false);
     setIsVideoOff(false);
-    toast.success('Call ended');
+    
+    toast.success(`Call ended - Duration: ${formatDuration(duration)}`);
+
+    // Update call session in database
+    if (profile?.family_id && user) {
+      try {
+        const { data: activeCalls } = await supabase
+          .from('call_sessions')
+          .select('id')
+          .eq('family_id', profile.family_id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (activeCalls && activeCalls.length > 0) {
+          await supabase
+            .from('call_sessions')
+            .update({
+              status: 'completed',
+              ended_at: new Date().toISOString(),
+              duration_seconds: duration,
+            })
+            .eq('id', activeCalls[0].id);
+        }
+      } catch (error) {
+        console.error('Error updating call session:', error);
+      }
+    }
   };
 
   if (!user) {
@@ -63,9 +133,16 @@ const Calls: React.FC = () => {
       <DashboardLayout user={user}>
         <div className="space-y-6">
           {/* Header */}
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Secure Calls</h1>
-            <p className="text-muted-foreground">Video and audio calls with end-to-end security</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Secure Calls</h1>
+              <p className="text-muted-foreground">Video and audio calls with end-to-end security</p>
+            </div>
+            {APP_CONFIG.MOCK_MODE && (
+              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600">
+                Mock Mode
+              </Badge>
+            )}
           </div>
 
           {/* Call Interface */}
@@ -73,19 +150,41 @@ const Calls: React.FC = () => {
             <Card className="bg-gray-900 text-white">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center">
+                  {/* Call Timer */}
+                  <div className="mb-4">
+                    <Badge variant="secondary" className="text-lg px-4 py-2">
+                      <Clock className="h-4 w-4 mr-2" />
+                      {formatDuration(callDuration)}
+                    </Badge>
+                  </div>
+
                   {/* Video Area */}
-                  <div className="w-full max-w-3xl aspect-video bg-gray-800 rounded-lg mb-6 flex items-center justify-center">
-                    {isVideoOff ? (
+                  <div className="w-full max-w-3xl aspect-video bg-gray-800 rounded-lg mb-6 flex items-center justify-center relative">
+                    {isVideoOff || callType === 'audio' ? (
                       <div className="text-center">
-                        <VideoOff className="h-16 w-16 mx-auto text-gray-500 mb-2" />
-                        <p className="text-gray-400">Camera is off</p>
+                        <div className="h-24 w-24 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                          <Users className="h-12 w-12 text-gray-400" />
+                        </div>
+                        <p className="text-gray-400">
+                          {callType === 'audio' ? 'Audio Call' : 'Camera is off'}
+                        </p>
                       </div>
                     ) : (
                       <div className="text-center">
-                        <Users className="h-16 w-16 mx-auto text-gray-500 mb-2" />
-                        <p className="text-gray-400">Connecting...</p>
+                        <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
+                          <Video className="h-12 w-12 text-primary" />
+                        </div>
+                        <p className="text-gray-400">Connected to Co-Parent</p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {APP_CONFIG.MOCK_MODE && '(Simulated video feed)'}
+                        </p>
                       </div>
                     )}
+
+                    {/* Self view (small) */}
+                    <div className="absolute bottom-4 right-4 w-32 h-24 bg-gray-700 rounded-lg flex items-center justify-center">
+                      <span className="text-xs text-gray-400">You</span>
+                    </div>
                   </div>
 
                   {/* Call Controls */}
@@ -108,14 +207,16 @@ const Calls: React.FC = () => {
                       <PhoneOff className="h-7 w-7" />
                     </Button>
                     
-                    <Button
-                      variant={isVideoOff ? 'destructive' : 'secondary'}
-                      size="lg"
-                      className="rounded-full h-14 w-14"
-                      onClick={() => setIsVideoOff(!isVideoOff)}
-                    >
-                      {isVideoOff ? <VideoOff className="h-6 w-6" /> : <Video className="h-6 w-6" />}
-                    </Button>
+                    {callType === 'video' && (
+                      <Button
+                        variant={isVideoOff ? 'destructive' : 'secondary'}
+                        size="lg"
+                        className="rounded-full h-14 w-14"
+                        onClick={() => setIsVideoOff(!isVideoOff)}
+                      >
+                        {isVideoOff ? <VideoOff className="h-6 w-6" /> : <Video className="h-6 w-6" />}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

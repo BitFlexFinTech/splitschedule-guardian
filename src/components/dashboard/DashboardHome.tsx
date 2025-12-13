@@ -35,7 +35,7 @@ const DashboardHome = ({ user }: DashboardHomeProps) => {
       value: "0",
       icon: Shield,
       color: "bg-warning/10 text-warning",
-      href: "/incidents",
+      href: "/incident-log",
     },
   ];
 
@@ -164,7 +164,7 @@ const DashboardHome = ({ user }: DashboardHomeProps) => {
             </p>
           </div>
           <Button variant="secondary" size="lg" asChild>
-            <Link to="/incidents">Log Incident</Link>
+            <Link to="/incident-log">Log Incident</Link>
           </Button>
         </div>
       </div>
