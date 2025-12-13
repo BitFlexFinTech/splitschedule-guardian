@@ -47,7 +47,7 @@ const IncidentLog: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [isAddIncidentOpen, setIsAddIncidentOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterSeverity, setFilterSeverity] = useState<string>('all');
+  const [filterSeverity, setFilterSeverity] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
   
   const [newIncident, setNewIncident] = useState({
     title: '',
@@ -72,7 +72,7 @@ const IncidentLog: React.FC = () => {
         .order('incident_date', { ascending: false });
       
       if (filterSeverity !== 'all') {
-        query = query.eq('severity', filterSeverity);
+        query = query.eq('severity', filterSeverity as 'low' | 'medium' | 'high' | 'critical');
       }
       
       const { data, error } = await query;
@@ -356,7 +356,7 @@ Each record is cryptographically hashed to ensure integrity.
           {/* Filter */}
           <div className="flex items-center gap-4">
             <Label>Filter by severity:</Label>
-            <Select value={filterSeverity} onValueChange={setFilterSeverity}>
+            <Select value={filterSeverity} onValueChange={(value) => setFilterSeverity(value as typeof filterSeverity)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
               </SelectTrigger>

@@ -32,9 +32,12 @@ const Invite: React.FC = () => {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [newInvite, setNewInvite] = useState({
+  const [newInvite, setNewInvite] = useState<{
+    email: string;
+    role: 'parent' | 'lawyer';
+  }>({
     email: '',
-    role: 'parent' as const,
+    role: 'parent',
   });
 
   const fetchInvites = async () => {
@@ -179,7 +182,7 @@ const Invite: React.FC = () => {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      {newInvite.role === 'lawyer' 
+                      {newInvite.role === 'lawyer'
                         ? 'Lawyers get read-only access to view incidents and documents'
                         : 'Co-parents can view and manage all family data'}
                     </p>
