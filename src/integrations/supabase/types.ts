@@ -909,6 +909,10 @@ export type Database = {
         Args: { _family_id: string; _user_id: string }
         Returns: boolean
       }
+      seed_demo_data_for_user: {
+        Args: { demo_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role:
