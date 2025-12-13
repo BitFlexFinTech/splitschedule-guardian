@@ -64,7 +64,7 @@ const Login = () => {
       });
 
       // Now sign in
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: 'demo-parent@testsplitschedule.com',
         password: 'Demo1234$$',
       });
@@ -76,9 +76,14 @@ const Login = () => {
           variant: "destructive",
         });
       } else {
+        // Seed demo data for this user
+        if (data.user) {
+          await supabase.rpc('seed_demo_data_for_user', { demo_user_id: data.user.id });
+        }
+        
         toast({
           title: "GodMode Activated!",
-          description: "Welcome to the demo account.",
+          description: "Welcome to the demo account with sample data.",
         });
         navigate("/dashboard");
       }
