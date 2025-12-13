@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -11,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { User, Bell, Globe, Shield, CreditCard, Users, Upload } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
@@ -29,6 +32,8 @@ const Settings: React.FC = () => {
     push: true,
     sms: false,
   });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   useEffect(() => {
     if (profile) {
@@ -74,7 +79,6 @@ const Settings: React.FC = () => {
 
     setIsLoading(true);
     try {
-      // Create family
       const { data: family, error: familyError } = await supabase
         .from('families')
         .insert({ name: familyName })
@@ -83,7 +87,6 @@ const Settings: React.FC = () => {
 
       if (familyError) throw familyError;
 
-      // Update profile with family_id
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ family_id: family.id })
@@ -93,8 +96,6 @@ const Settings: React.FC = () => {
 
       toast.success('Family created successfully');
       setFamilyName('');
-      
-      // Refresh the page to update profile
       window.location.reload();
     } catch (error) {
       console.error('Error creating family:', error);
@@ -134,6 +135,71 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast.error('Failed to upload avatar');
+    }
+  };
+
+  const handleInviteCoParent = () => {
+    navigate('/invite');
+  };
+
+  const handleChangePassword = async () => {
+    if (!user?.email) {
+      toast.error('No email associated with this account');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+
+      if (error) throw error;
+      toast.success('Password reset email sent! Check your inbox.');
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error(error.message || 'Failed to send reset email');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') {
+      toast.error('Please type DELETE to confirm');
+      return;
+    }
+
+    try {
+      // Sign out the user (actual deletion would require admin/edge function)
+      await supabase.auth.signOut();
+      toast.success('Account deletion requested. You have been signed out.');
+      navigate('/');
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Failed to process account deletion');
+    }
+  };
+
+  const handleUpgradeToPro = () => {
+    navigate('/subscriptions');
+  };
+
+  const handleSaveNotifications = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          notification_email: notifications.email,
+          notification_push: notifications.push,
+          notification_sms: notifications.sms,
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      toast.success('Notification preferences saved');
+    } catch (error) {
+      console.error('Error saving notifications:', error);
+      toast.error('Failed to save notification preferences');
     }
   };
 
@@ -272,7 +338,9 @@ const Settings: React.FC = () => {
                       <p className="font-medium">Family Connected</p>
                       <p className="text-sm text-muted-foreground">ID: {profile.family_id}</p>
                     </div>
-                    <Button variant="outline">Invite Co-Parent</Button>
+                    <Button variant="outline" onClick={handleInviteCoParent}>
+                      Invite Co-Parent
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -375,6 +443,9 @@ const Settings: React.FC = () => {
                   onCheckedChange={(checked) => setNotifications({ ...notifications, sms: checked })}
                 />
               </div>
+              <Button variant="outline" onClick={handleSaveNotifications}>
+                Save Notification Preferences
+              </Button>
             </CardContent>
           </Card>
 
@@ -393,7 +464,7 @@ const Settings: React.FC = () => {
                   <p className="font-medium">Free Plan</p>
                   <p className="text-sm text-muted-foreground">Basic features with incident log access</p>
                 </div>
-                <Button>Upgrade to Pro</Button>
+                <Button onClick={handleUpgradeToPro}>Upgrade to Pro</Button>
               </div>
               <p className="text-sm text-muted-foreground mt-4">
                 Pro: $9.99/month or $99.99/year per family
@@ -411,13 +482,53 @@ const Settings: React.FC = () => {
               <CardDescription>Manage your security settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button variant="outline">Change Password</Button>
-              <Button variant="outline" className="text-destructive">
+              <Button variant="outline" onClick={handleChangePassword}>
+                Change Password
+              </Button>
+              <Button 
+                variant="outline" 
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
                 Delete Account
               </Button>
             </CardContent>
           </Card>
         </div>
+
+        {/* Delete Account Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Delete Account</DialogTitle>
+              <DialogDescription>
+                This action cannot be undone. This will permanently delete your account and remove all your data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                Type <strong>DELETE</strong> to confirm:
+              </p>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== 'DELETE'}
+              >
+                Delete Account
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </>
   );

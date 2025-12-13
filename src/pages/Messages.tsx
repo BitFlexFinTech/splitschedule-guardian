@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Send, Smile, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { APP_CONFIG } from '@/lib/config';
+import { Send, Smile, AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface Message {
@@ -29,6 +31,12 @@ interface Conversation {
   updated_at: string;
 }
 
+interface ToneAnalysis {
+  score: number;
+  label: string;
+  warning?: string;
+}
+
 const getToneIcon = (score: number | null) => {
   if (score === null) return null;
   if (score >= 0.7) return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -43,6 +51,7 @@ const getToneBadge = (label: string | null) => {
     positive: 'bg-green-500/10 text-green-500',
     neutral: 'bg-yellow-500/10 text-yellow-500',
     negative: 'bg-red-500/10 text-red-500',
+    hostile: 'bg-red-500/10 text-red-500',
   };
   
   return (
@@ -59,6 +68,9 @@ const Messages: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [toneWarning, setToneWarning] = useState<ToneAnalysis | null>(null);
+  const [showWarningDialog, setShowWarningDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -72,7 +84,6 @@ const Messages: React.FC = () => {
     }
 
     try {
-      // Get or create conversation for this family
       let { data: existingConversation, error: fetchError } = await supabase
         .from('conversations')
         .select('*')
@@ -80,7 +91,6 @@ const Messages: React.FC = () => {
         .single();
 
       if (fetchError && fetchError.code === 'PGRST116') {
-        // No conversation exists, create one
         const { data: newConversation, error: createError } = await supabase
           .from('conversations')
           .insert({ family_id: profile.family_id })
@@ -90,7 +100,6 @@ const Messages: React.FC = () => {
         if (createError) throw createError;
         existingConversation = newConversation;
 
-        // Add current user as participant
         await supabase
           .from('conversation_participants')
           .insert({ conversation_id: newConversation.id, user_id: user?.id });
@@ -100,7 +109,6 @@ const Messages: React.FC = () => {
 
       setConversation(existingConversation);
       
-      // Fetch messages
       const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
         .select('*')
@@ -146,36 +154,82 @@ const Messages: React.FC = () => {
     };
   }, [conversation?.id]);
 
-  const analyzeTone = async (text: string): Promise<{ score: number; label: string }> => {
-    // Simple client-side tone analysis
-    // In production, this would call an edge function with Lovable AI
-    const positiveWords = ['thanks', 'great', 'wonderful', 'appreciate', 'happy', 'love', 'good', 'amazing', 'perfect'];
-    const negativeWords = ['angry', 'upset', 'frustrated', 'hate', 'terrible', 'awful', 'never', 'always', 'fault'];
+  const analyzeTone = async (text: string): Promise<ToneAnalysis> => {
+    setIsAnalyzing(true);
+    
+    try {
+      // Try to call the edge function
+      const { data, error } = await supabase.functions.invoke('tone-analyzer', {
+        body: { text },
+      });
+
+      if (!error && data) {
+        return {
+          score: data.score,
+          label: data.label,
+          warning: data.warning,
+        };
+      }
+    } catch (error) {
+      console.warn('Edge function failed, using fallback:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+
+    // Fallback: Simple client-side tone analysis
+    const positiveWords = ['thanks', 'great', 'wonderful', 'appreciate', 'happy', 'love', 'good', 'amazing', 'perfect', 'please', 'welcome'];
+    const negativeWords = ['angry', 'upset', 'frustrated', 'hate', 'terrible', 'awful', 'never', 'always', 'fault', 'blame', 'stupid', 'idiot'];
+    const hostileWords = ['hate', 'stupid', 'idiot', 'damn', 'hell'];
     
     const words = text.toLowerCase().split(/\s+/);
     let positiveCount = 0;
     let negativeCount = 0;
+    let hasHostile = false;
     
     words.forEach(word => {
       if (positiveWords.some(pw => word.includes(pw))) positiveCount++;
       if (negativeWords.some(nw => word.includes(nw))) negativeCount++;
+      if (hostileWords.some(hw => word.includes(hw))) hasHostile = true;
     });
     
     const total = positiveCount + negativeCount;
-    if (total === 0) return { score: 0.5, label: 'neutral' };
+    let score = 0.5;
+    let label = 'neutral';
     
-    const score = positiveCount / total;
-    const label = score >= 0.6 ? 'positive' : score <= 0.4 ? 'negative' : 'neutral';
+    if (total > 0) {
+      score = positiveCount / total;
+      label = score >= 0.6 ? 'positive' : score <= 0.4 ? 'negative' : 'neutral';
+    }
     
-    return { score, label };
+    if (hasHostile) {
+      score = 0.2;
+      label = 'hostile';
+    }
+    
+    return { 
+      score, 
+      label,
+      warning: label === 'hostile' ? 'This message may come across as hostile.' : undefined
+    };
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (force = false) => {
     if (!newMessage.trim() || !conversation || !user) return;
+
+    // Analyze tone before sending
+    if (!force && !toneWarning) {
+      const analysis = await analyzeTone(newMessage);
+      
+      if (analysis.warning || analysis.label === 'hostile' || analysis.label === 'negative') {
+        setToneWarning(analysis);
+        setShowWarningDialog(true);
+        return;
+      }
+    }
 
     setIsSending(true);
     try {
-      const { score, label } = await analyzeTone(newMessage);
+      const analysis = toneWarning || await analyzeTone(newMessage);
 
       const { error } = await supabase
         .from('messages')
@@ -183,12 +237,13 @@ const Messages: React.FC = () => {
           conversation_id: conversation.id,
           sender_id: user.id,
           content: newMessage,
-          tone_score: score,
-          tone_label: label,
+          tone_score: analysis.score,
+          tone_label: analysis.label,
         });
 
       if (error) throw error;
       setNewMessage('');
+      setToneWarning(null);
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
@@ -218,9 +273,16 @@ const Messages: React.FC = () => {
       <DashboardLayout user={user}>
         <div className="h-[calc(100vh-12rem)] flex flex-col">
           {/* Header */}
-          <div className="mb-4">
-            <h1 className="text-3xl font-bold text-foreground">Messages</h1>
-            <p className="text-muted-foreground">Secure communication with tone monitoring</p>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+              <p className="text-muted-foreground">Secure communication with tone monitoring</p>
+            </div>
+            {APP_CONFIG.MOCK_MODE && (
+              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600">
+                Mock Mode
+              </Badge>
+            )}
           </div>
 
           {/* Chat Container */}
@@ -298,13 +360,17 @@ const Messages: React.FC = () => {
                     onKeyPress={handleKeyPress}
                     placeholder="Type a message..."
                     className="flex-1"
-                    disabled={!profile?.family_id || isSending}
+                    disabled={!profile?.family_id || isSending || isAnalyzing}
                   />
                   <Button 
-                    onClick={handleSendMessage} 
-                    disabled={!newMessage.trim() || !profile?.family_id || isSending}
+                    onClick={() => handleSendMessage()} 
+                    disabled={!newMessage.trim() || !profile?.family_id || isSending || isAnalyzing}
                   >
-                    <Send className="h-5 w-5" />
+                    {isAnalyzing ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 text-center">
@@ -314,6 +380,54 @@ const Messages: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Tone Warning Dialog */}
+        <Dialog open={showWarningDialog} onOpenChange={setShowWarningDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-yellow-600">
+                <AlertTriangle className="h-5 w-5" />
+                Tone Warning
+              </DialogTitle>
+              <DialogDescription>
+                This message may come across as {toneWarning?.label}. Would you like to rephrase it?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm">{newMessage}</p>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600">
+                  Tone: {toneWarning?.label}
+                </Badge>
+                <Badge variant="outline">
+                  Score: {Math.round((toneWarning?.score || 0) * 100)}%
+                </Badge>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowWarningDialog(false);
+                  setToneWarning(null);
+                }}
+              >
+                Edit Message
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={() => {
+                  setShowWarningDialog(false);
+                  handleSendMessage(true);
+                }}
+              >
+                Send Anyway
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </>
   );

@@ -204,6 +204,71 @@ export type Database = {
           },
         ]
       }
+      children: {
+        Row: {
+          allergies: string[] | null
+          created_at: string
+          date_of_birth: string | null
+          doctor_address: string | null
+          doctor_name: string | null
+          doctor_phone: string | null
+          emergency_contacts: Json | null
+          family_id: string
+          id: string
+          medications: string[] | null
+          name: string
+          notes: string | null
+          school_address: string | null
+          school_name: string | null
+          school_phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          allergies?: string[] | null
+          created_at?: string
+          date_of_birth?: string | null
+          doctor_address?: string | null
+          doctor_name?: string | null
+          doctor_phone?: string | null
+          emergency_contacts?: Json | null
+          family_id: string
+          id?: string
+          medications?: string[] | null
+          name: string
+          notes?: string | null
+          school_address?: string | null
+          school_name?: string | null
+          school_phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          allergies?: string[] | null
+          created_at?: string
+          date_of_birth?: string | null
+          doctor_address?: string | null
+          doctor_name?: string | null
+          doctor_phone?: string | null
+          emergency_contacts?: Json | null
+          family_id?: string
+          id?: string
+          medications?: string[] | null
+          name?: string
+          notes?: string | null
+          school_address?: string | null
+          school_name?: string | null
+          school_phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "children_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -258,6 +323,57 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "conversations_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custody_transfers: {
+        Row: {
+          child_id: string | null
+          created_at: string
+          family_id: string
+          id: string
+          location: string | null
+          notes: string | null
+          transfer_type: string
+          transferred_by: string | null
+          transferred_to: string | null
+        }
+        Insert: {
+          child_id?: string | null
+          created_at?: string
+          family_id: string
+          id?: string
+          location?: string | null
+          notes?: string | null
+          transfer_type: string
+          transferred_by?: string | null
+          transferred_to?: string | null
+        }
+        Update: {
+          child_id?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          location?: string | null
+          notes?: string | null
+          transfer_type?: string
+          transferred_by?: string | null
+          transferred_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custody_transfers_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
             referencedRelation: "families"
@@ -560,6 +676,9 @@ export type Database = {
           full_name: string | null
           id: string
           language: string | null
+          notification_email: boolean | null
+          notification_push: boolean | null
+          notification_sms: boolean | null
           phone: string | null
           timezone: string | null
           updated_at: string
@@ -573,6 +692,9 @@ export type Database = {
           full_name?: string | null
           id?: string
           language?: string | null
+          notification_email?: boolean | null
+          notification_push?: boolean | null
+          notification_sms?: boolean | null
           phone?: string | null
           timezone?: string | null
           updated_at?: string
@@ -586,6 +708,9 @@ export type Database = {
           full_name?: string | null
           id?: string
           language?: string | null
+          notification_email?: boolean | null
+          notification_push?: boolean | null
+          notification_sms?: boolean | null
           phone?: string | null
           timezone?: string | null
           updated_at?: string
@@ -594,6 +719,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reimbursement_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          expense_id: string | null
+          family_id: string
+          id: string
+          notes: string | null
+          requested_by: string
+          requested_to: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          expense_id?: string | null
+          family_id: string
+          id?: string
+          notes?: string | null
+          requested_by: string
+          requested_to: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          expense_id?: string | null
+          family_id?: string
+          id?: string
+          notes?: string | null
+          requested_by?: string
+          requested_to?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reimbursement_requests_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reimbursement_requests_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
             referencedRelation: "families"
