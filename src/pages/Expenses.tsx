@@ -46,7 +46,7 @@ const Expenses: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'activities' | 'childcare' | 'clothing' | 'education' | 'entertainment' | 'food' | 'medical' | 'other' | 'transportation'>('all');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   
   const [newExpense, setNewExpense] = useState({
@@ -72,7 +72,7 @@ const Expenses: React.FC = () => {
         .order('expense_date', { ascending: false });
       
       if (filterCategory !== 'all') {
-        query = query.eq('category', filterCategory);
+        query = query.eq('category', filterCategory as 'activities' | 'childcare' | 'clothing' | 'education' | 'entertainment' | 'food' | 'medical' | 'other' | 'transportation');
       }
       
       const { data, error } = await query;
@@ -376,7 +376,7 @@ const Expenses: React.FC = () => {
           {/* Filter */}
           <div className="flex items-center gap-4">
             <Filter className="h-5 w-5 text-muted-foreground" />
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <Select value={filterCategory} onValueChange={(value) => setFilterCategory(value as typeof filterCategory)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>

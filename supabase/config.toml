@@ -1,1 +1,10 @@
 project_id = "nkjzvvgxosmkyqpzzugr"
+
+[functions.bug-scanner]
+verify_jwt = false
+
+[functions.tone-analyzer]
+verify_jwt = true
+
+[functions.security-scanner]
+verify_jwt = false

@@ -32,8 +32,8 @@ const navItems = [
   { name: "Payments", href: "/payments", icon: CreditCard },
   { name: "Messages", href: "/messages", icon: MessageSquare },
   { name: "Calls", href: "/calls", icon: Phone },
-  { name: "Documents", href: "/documents", icon: FileText },
-  { name: "Incidents", href: "/incidents", icon: Shield },
+  { name: "Documents", href: "/file-vault", icon: FileText },
+  { name: "Incidents", href: "/incident-log", icon: Shield },
 ];
 
 const DashboardLayout = ({ children, user }: DashboardLayoutProps) => {
