@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.security-scanner]
 verify_jwt = false
+
+[functions.stripe-webhooks]
+verify_jwt = false

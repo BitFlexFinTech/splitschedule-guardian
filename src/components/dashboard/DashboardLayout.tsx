@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Calendar,
   DollarSign,
@@ -17,6 +18,12 @@ import {
   CreditCard,
   Phone,
   Bell,
+  Baby,
+  BarChart3,
+  Plug,
+  HelpCircle,
+  UserPlus,
+  ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,12 +35,20 @@ interface DashboardLayoutProps {
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Calendar", href: "/calendar", icon: Calendar },
+  { name: "Info Bank", href: "/info-bank", icon: Baby },
   { name: "Expenses", href: "/expenses", icon: DollarSign },
   { name: "Payments", href: "/payments", icon: CreditCard },
   { name: "Messages", href: "/messages", icon: MessageSquare },
   { name: "Calls", href: "/calls", icon: Phone },
   { name: "Documents", href: "/file-vault", icon: FileText },
   { name: "Incidents", href: "/incident-log", icon: Shield },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Integrations", href: "/integrations", icon: Plug },
+];
+
+const bottomNavItems = [
+  { name: "Support", href: "/support", icon: HelpCircle },
+  { name: "Invite Co-Parent", href: "/invite", icon: UserPlus },
 ];
 
 const DashboardLayout = ({ children, user }: DashboardLayoutProps) => {
@@ -41,6 +56,7 @@ const DashboardLayout = ({ children, user }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -110,6 +126,38 @@ const DashboardLayout = ({ children, user }: DashboardLayoutProps) => {
 
           {/* Bottom Section */}
           <div className="p-4 border-t border-border space-y-1">
+            {bottomNavItems.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.name}
+                </Link>
+              );
+            })}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === "/admin"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <ShieldCheck className="w-5 h-5" />
+                Admin
+              </Link>
+            )}
             <Link
               to="/settings"
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"

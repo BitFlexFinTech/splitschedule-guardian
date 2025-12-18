@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_drafts: {
+        Row: {
+          ad_content: Json | null
+          approved_at: string | null
+          approved_by: string | null
+          budget: number | null
+          created_at: string
+          id: string
+          name: string
+          platform: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ad_content?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          budget?: number | null
+          created_at?: string
+          id?: string
+          name: string
+          platform?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ad_content?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          budget?: number | null
+          created_at?: string
+          id?: string
+          name?: string
+          platform?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -203,6 +242,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      campaigns: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          campaign_type: string
+          content: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          scheduled_at: string | null
+          status: string
+          target_audience: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          campaign_type?: string
+          content?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          scheduled_at?: string | null
+          status?: string
+          target_audience?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          campaign_type?: string
+          content?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          scheduled_at?: string | null
+          status?: string
+          target_audience?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       children: {
         Row: {
@@ -517,6 +601,42 @@ export type Database = {
           },
         ]
       }
+      heat_regions: {
+        Row: {
+          country: string
+          created_at: string
+          engagement_score: number | null
+          family_count: number | null
+          id: string
+          region_name: string
+          state_code: string | null
+          updated_at: string
+          user_count: number | null
+        }
+        Insert: {
+          country?: string
+          created_at?: string
+          engagement_score?: number | null
+          family_count?: number | null
+          id?: string
+          region_name: string
+          state_code?: string | null
+          updated_at?: string
+          user_count?: number | null
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          engagement_score?: number | null
+          family_count?: number | null
+          id?: string
+          region_name?: string
+          state_code?: string | null
+          updated_at?: string
+          user_count?: number | null
+        }
+        Relationships: []
+      }
       incidents: {
         Row: {
           attachment_urls: string[] | null
@@ -573,6 +693,42 @@ export type Database = {
           },
         ]
       }
+      integration_configs: {
+        Row: {
+          config_data: Json | null
+          connected_at: string | null
+          connected_by: string | null
+          created_at: string
+          id: string
+          integration_name: string
+          is_enabled: boolean
+          last_sync_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          config_data?: Json | null
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          id?: string
+          integration_name: string
+          is_enabled?: boolean
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          config_data?: Json | null
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          id?: string
+          integration_name?: string
+          is_enabled?: boolean
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invites: {
         Row: {
           accepted_at: string | null
@@ -610,6 +766,85 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "invites_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issued_cards: {
+        Row: {
+          card_status: string
+          created_at: string
+          family_id: string
+          id: string
+          last_four: string | null
+          spending_limit: number | null
+          stripe_card_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_status?: string
+          created_at?: string
+          family_id: string
+          id?: string
+          last_four?: string | null
+          spending_limit?: number | null
+          stripe_card_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_status?: string
+          created_at?: string
+          family_id?: string
+          id?: string
+          last_four?: string | null
+          spending_limit?: number | null
+          stripe_card_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issued_cards_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchant_whitelist: {
+        Row: {
+          created_at: string
+          family_id: string
+          id: string
+          is_allowed: boolean
+          merchant_category: string | null
+          merchant_name: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          id?: string
+          is_allowed?: boolean
+          merchant_category?: string | null
+          merchant_name: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          id?: string
+          is_allowed?: boolean
+          merchant_category?: string | null
+          merchant_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_whitelist_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: false
             referencedRelation: "families"
@@ -663,6 +898,53 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          family_id: string
+          id: string
+          recipient_id: string
+          sender_id: string
+          status: string
+          stripe_payment_id: string | null
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          family_id: string
+          id?: string
+          recipient_id: string
+          sender_id: string
+          status?: string
+          stripe_payment_id?: string | null
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          family_id?: string
+          id?: string
+          recipient_id?: string
+          sender_id?: string
+          status?: string
+          stripe_payment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
             referencedColumns: ["id"]
           },
         ]
