@@ -27,6 +27,9 @@ import Integrations from "./pages/Integrations";
 import Legal from "./pages/Legal";
 import Admin from "./pages/Admin";
 import LawyerDashboard from "./pages/LawyerDashboard";
+import FreeLog from "./pages/FreeLog";
+import HeatMap from "./pages/HeatMap";
+import AdsControl from "./pages/AdsControl";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -62,6 +65,9 @@ const App = () => (
               <Route path="/legal" element={<Legal />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/dashboard-lawyer" element={<LawyerDashboard />} />
+              <Route path="/free-log" element={<FreeLog />} />
+              <Route path="/heatmap" element={<HeatMap />} />
+              <Route path="/ads" element={<AdsControl />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
