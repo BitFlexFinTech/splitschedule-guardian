@@ -62,6 +62,30 @@ export default {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
         },
+        purple: {
+          DEFAULT: "hsl(262, 83%, 58%)",
+          foreground: "hsl(0, 0%, 100%)",
+        },
+        pink: {
+          DEFAULT: "hsl(328, 81%, 56%)",
+          foreground: "hsl(0, 0%, 100%)",
+        },
+        orange: {
+          DEFAULT: "hsl(25, 95%, 53%)",
+          foreground: "hsl(0, 0%, 100%)",
+        },
+        cyan: {
+          DEFAULT: "hsl(199, 89%, 48%)",
+          foreground: "hsl(0, 0%, 100%)",
+        },
+        amber: {
+          DEFAULT: "hsl(38, 92%, 50%)",
+          foreground: "hsl(0, 0%, 100%)",
+        },
+        emerald: {
+          DEFAULT: "hsl(142, 76%, 36%)",
+          foreground: "hsl(0, 0%, 100%)",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
