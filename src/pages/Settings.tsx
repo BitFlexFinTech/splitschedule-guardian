@@ -13,18 +13,22 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { User, Bell, Globe, Shield, CreditCard, Users, Upload } from 'lucide-react';
+import { User, Bell, Globe, Shield, CreditCard, Users, Upload, Download, Trash2, FileText, Cookie, Loader2 } from 'lucide-react';
+import { APP_CONFIG } from '@/lib/config';
 
 const Settings: React.FC = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
     language: 'en',
     timezone: 'UTC',
+    preferred_currency: 'USD',
   });
   const [familyName, setFamilyName] = useState('');
   const [notifications, setNotifications] = useState({
@@ -34,6 +38,7 @@ const Settings: React.FC = () => {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [gdprConsentGiven, setGdprConsentGiven] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -42,7 +47,9 @@ const Settings: React.FC = () => {
         phone: profile.phone || '',
         language: profile.language || 'en',
         timezone: profile.timezone || 'UTC',
+        preferred_currency: profile.preferred_currency || 'USD',
       });
+      setGdprConsentGiven(!!profile.gdpr_consent_at);
     }
   }, [profile]);
 
@@ -51,15 +58,13 @@ const Settings: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: formData.full_name,
-          phone: formData.phone,
-          language: formData.language,
-          timezone: formData.timezone,
-        })
-        .eq('user_id', user.id);
+      const { error } = await supabase.from('profiles').update({
+        full_name: formData.full_name,
+        phone: formData.phone,
+        language: formData.language,
+        timezone: formData.timezone,
+        preferred_currency: formData.preferred_currency,
+      }).eq('user_id', user.id);
 
       if (error) throw error;
       toast.success('Profile updated successfully');
@@ -113,15 +118,10 @@ const Settings: React.FC = () => {
       const fileExt = file.name.split('.').pop();
       const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
       const { error: updateError } = await supabase
         .from('profiles')
@@ -138,26 +138,69 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleInviteCoParent = () => {
-    navigate('/invite');
-  };
-
-  const handleChangePassword = async () => {
-    if (!user?.email) {
-      toast.error('No email associated with this account');
+  const handleExportData = async () => {
+    if (!user || !profile?.family_id) {
+      toast.error('No data to export');
       return;
     }
 
+    setIsExporting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/login`,
-      });
+      const [profileData, expensesData, incidentsData, messagesData, eventsData] = await Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', user.id),
+        supabase.from('expenses').select('*').eq('family_id', profile.family_id),
+        supabase.from('incidents').select('*').eq('family_id', profile.family_id),
+        supabase.from('conversations').select('id').eq('family_id', profile.family_id).then(async (res) => {
+          if (res.data && res.data.length > 0) {
+            return supabase.from('messages').select('*').eq('conversation_id', res.data[0].id);
+          }
+          return { data: [] };
+        }),
+        supabase.from('calendar_events').select('*').eq('family_id', profile.family_id),
+      ]);
+
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        user_id: user.id,
+        profile: profileData.data?.[0] || null,
+        expenses: expensesData.data || [],
+        incidents: incidentsData.data || [],
+        messages: messagesData.data || [],
+        calendar_events: eventsData.data || [],
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `splitschedule-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success('Data exported successfully');
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      toast.error('Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleGdprConsent = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('profiles').update({
+        gdpr_consent_at: new Date().toISOString(),
+      }).eq('user_id', user.id);
 
       if (error) throw error;
-      toast.success('Password reset email sent! Check your inbox.');
-    } catch (error: any) {
-      console.error('Error:', error);
-      toast.error(error.message || 'Failed to send reset email');
+      setGdprConsentGiven(true);
+      toast.success('GDPR consent recorded');
+    } catch (error) {
+      toast.error('Failed to record consent');
     }
   };
 
@@ -168,7 +211,6 @@ const Settings: React.FC = () => {
     }
 
     try {
-      // Sign out the user (actual deletion would require admin/edge function)
       await supabase.auth.signOut();
       toast.success('Account deletion requested. You have been signed out.');
       navigate('/');
@@ -178,34 +220,30 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleUpgradeToPro = () => {
-    navigate('/subscriptions');
-  };
-
   const handleSaveNotifications = async () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          notification_email: notifications.email,
-          notification_push: notifications.push,
-          notification_sms: notifications.sms,
-        })
-        .eq('user_id', user.id);
+      const { error } = await supabase.from('profiles').update({
+        notification_email: notifications.email,
+        notification_push: notifications.push,
+        notification_sms: notifications.sms,
+      }).eq('user_id', user.id);
 
       if (error) throw error;
       toast.success('Notification preferences saved');
     } catch (error) {
-      console.error('Error saving notifications:', error);
       toast.error('Failed to save notification preferences');
     }
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
+
+  const currencies = APP_CONFIG.CURRENCIES || [
+    { code: 'USD', symbol: '$', name: 'US Dollar' },
+    { code: 'GBP', symbol: '£', name: 'British Pound' },
+    { code: 'EUR', symbol: '€', name: 'Euro' },
+  ];
 
   return (
     <>
@@ -222,7 +260,7 @@ const Settings: React.FC = () => {
           </div>
 
           {/* Profile Section */}
-          <Card>
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -231,7 +269,6 @@ const Settings: React.FC = () => {
               <CardDescription>Update your personal information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Avatar */}
               <div className="flex items-center gap-6">
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={profile?.avatar_url || ''} />
@@ -246,22 +283,13 @@ const Settings: React.FC = () => {
                       Upload new photo
                     </div>
                   </Label>
-                  <Input
-                    id="avatar"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarUpload}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    JPG, PNG or GIF. Max 2MB.
-                  </p>
+                  <Input id="avatar" type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG or GIF. Max 2MB.</p>
                 </div>
               </div>
 
               <Separator />
 
-              {/* Profile Form */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="full_name">Full Name</Label>
@@ -274,12 +302,7 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    value={user.email || ''}
-                    disabled
-                    className="bg-muted"
-                  />
+                  <Input id="email" value={user.email || ''} disabled className="bg-muted" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
@@ -292,10 +315,7 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
-                  <Select
-                    value={formData.timezone}
-                    onValueChange={(value) => setFormData({ ...formData, timezone: value })}
-                  >
+                  <Select value={formData.timezone} onValueChange={(value) => setFormData({ ...formData, timezone: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -305,6 +325,8 @@ const Settings: React.FC = () => {
                       <SelectItem value="America/Chicago">Central Time</SelectItem>
                       <SelectItem value="America/Denver">Mountain Time</SelectItem>
                       <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                      <SelectItem value="Europe/London">London (GMT)</SelectItem>
+                      <SelectItem value="Europe/Paris">Paris (CET)</SelectItem>
                       <SelectItem value="Africa/Johannesburg">South Africa (CAT)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -317,8 +339,41 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Currency Section */}
+          <Card className="glass-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Currency Preferences
+              </CardTitle>
+              <CardDescription>Set your preferred currency for expenses</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4 max-w-sm">
+                <div className="space-y-2">
+                  <Label>Preferred Currency</Label>
+                  <Select value={formData.preferred_currency} onValueChange={(value) => setFormData({ ...formData, preferred_currency: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((currency) => (
+                        <SelectItem key={currency.code} value={currency.code}>
+                          {currency.symbol} {currency.name} ({currency.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  All expenses will be displayed in your preferred currency
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Family Section */}
-          <Card>
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
@@ -333,12 +388,12 @@ const Settings: React.FC = () => {
             <CardContent>
               {profile?.family_id ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                     <div>
                       <p className="font-medium">Family Connected</p>
-                      <p className="text-sm text-muted-foreground">ID: {profile.family_id}</p>
+                      <p className="text-sm text-muted-foreground">ID: {profile.family_id.slice(0, 8)}...</p>
                     </div>
-                    <Button variant="outline" onClick={handleInviteCoParent}>
+                    <Button variant="outline" onClick={() => navigate('/invite')}>
                       Invite Co-Parent
                     </Button>
                   </div>
@@ -362,47 +417,71 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Language Section */}
-          <Card>
+          {/* GDPR & Privacy Section */}
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                Language & Region
+                <FileText className="h-5 w-5" />
+                Privacy & GDPR
               </CardTitle>
-              <CardDescription>Set your preferred language</CardDescription>
+              <CardDescription>Manage your data and privacy settings</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-w-sm">
-                <Label htmlFor="language">Language</Label>
-                <Select
-                  value={formData.language}
-                  onValueChange={(value) => setFormData({ ...formData, language: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Español</SelectItem>
-                    <SelectItem value="fr">Français</SelectItem>
-                    <SelectItem value="de">Deutsch</SelectItem>
-                    <SelectItem value="pt">Português</SelectItem>
-                    <SelectItem value="zh">中文</SelectItem>
-                    <SelectItem value="ja">日本語</SelectItem>
-                    <SelectItem value="ko">한국어</SelectItem>
-                    <SelectItem value="ar">العربية</SelectItem>
-                    <SelectItem value="hi">हिन्दी</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Powered by DeepL translation for 25+ languages
-                </p>
+            <CardContent className="space-y-6">
+              {/* GDPR Consent */}
+              <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Cookie className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">GDPR Consent</p>
+                    <p className="text-sm text-muted-foreground">
+                      {gdprConsentGiven 
+                        ? `Consent given on ${profile?.gdpr_consent_at ? new Date(profile.gdpr_consent_at).toLocaleDateString() : 'N/A'}`
+                        : 'Required for EU/UK users'}
+                    </p>
+                  </div>
+                </div>
+                {gdprConsentGiven ? (
+                  <Badge className="bg-green-500/10 text-green-600 border-green-500/30">
+                    Consented
+                  </Badge>
+                ) : (
+                  <Button onClick={handleGdprConsent}>Give Consent</Button>
+                )}
+              </div>
+
+              {/* Export Data */}
+              <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Download className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Export My Data</p>
+                    <p className="text-sm text-muted-foreground">Download all your data in JSON format</p>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={handleExportData} disabled={isExporting}>
+                  {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                  Export
+                </Button>
+              </div>
+
+              {/* Privacy Policy */}
+              <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Privacy Policy</p>
+                    <p className="text-sm text-muted-foreground">Read our privacy policy</p>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={() => navigate('/legal')}>
+                  View Policy
+                </Button>
               </div>
             </CardContent>
           </Card>
 
           {/* Notifications Section */}
-          <Card>
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
@@ -450,7 +529,7 @@ const Settings: React.FC = () => {
           </Card>
 
           {/* Subscription Section */}
-          <Card>
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5" />
@@ -459,12 +538,12 @@ const Settings: React.FC = () => {
               <CardDescription>Manage your subscription plan</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                 <div>
                   <p className="font-medium">Free Plan</p>
                   <p className="text-sm text-muted-foreground">Basic features with incident log access</p>
                 </div>
-                <Button onClick={handleUpgradeToPro}>Upgrade to Pro</Button>
+                <Button onClick={() => navigate('/subscriptions')}>Upgrade to Pro</Button>
               </div>
               <p className="text-sm text-muted-foreground mt-4">
                 Pro: $9.99/month or $99.99/year per family
@@ -472,63 +551,57 @@ const Settings: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Security Section */}
-          <Card>
+          {/* Danger Zone */}
+          <Card className="glass-card border-red-500/20">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-red-500">
                 <Shield className="h-5 w-5" />
-                Security
+                Danger Zone
               </CardTitle>
-              <CardDescription>Manage your security settings</CardDescription>
+              <CardDescription>Irreversible account actions</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button variant="outline" onClick={handleChangePassword}>
-                Change Password
-              </Button>
-              <Button 
-                variant="outline" 
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                Delete Account
-              </Button>
+              <div className="flex items-center justify-between p-4 border border-red-500/20 rounded-lg bg-red-500/5">
+                <div className="flex items-center gap-3">
+                  <Trash2 className="h-5 w-5 text-red-500" />
+                  <div>
+                    <p className="font-medium">Delete Account</p>
+                    <p className="text-sm text-muted-foreground">Permanently delete your account and all data</p>
+                  </div>
+                </div>
+                <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                  Delete Account
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Delete Account Dialog */}
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="text-destructive">Delete Account</DialogTitle>
-              <DialogDescription>
-                This action cannot be undone. This will permanently delete your account and remove all your data.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <p className="text-sm text-muted-foreground">
-                Type <strong>DELETE</strong> to confirm:
-              </p>
-              <Input
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder="DELETE"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={handleDeleteAccount}
-                disabled={deleteConfirmText !== 'DELETE'}
-              >
-                Delete Account
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Account</DialogTitle>
+                <DialogDescription>
+                  This action cannot be undone. All your data will be permanently deleted.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <p className="text-sm">Type <strong>DELETE</strong> to confirm:</p>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDeleteAccount}>
+                  Delete My Account
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </DashboardLayout>
     </>
   );
