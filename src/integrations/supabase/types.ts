@@ -53,6 +53,41 @@ export type Database = {
         }
         Relationships: []
       }
+      analytics_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          family_id: string | null
+          id: string
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          family_id?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          family_id?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_events_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1385,6 +1420,144 @@ export type Database = {
             foreignKeyName: "subscriptions_family_id_fkey"
             columns: ["family_id"]
             isOneToOne: true
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_chat_messages: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          sender_id: string | null
+          sender_type: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          sender_id?: string | null
+          sender_type: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          sender_id?: string | null
+          sender_type?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "support_chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_chat_sessions: {
+        Row: {
+          agent_id: string | null
+          ended_at: string | null
+          id: string
+          started_at: string | null
+          status: string
+          ticket_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          ticket_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          ticket_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_chat_sessions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          assigned_agent_id: string | null
+          category: string | null
+          created_at: string | null
+          description: string | null
+          family_id: string | null
+          first_response_at: string | null
+          id: string
+          priority: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          status: string
+          subject: string
+          ticket_number: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          family_id?: string | null
+          first_response_at?: string | null
+          id?: string
+          priority?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+          subject: string
+          ticket_number?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          family_id?: string | null
+          first_response_at?: string | null
+          id?: string
+          priority?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+          subject?: string
+          ticket_number?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
             referencedRelation: "families"
             referencedColumns: ["id"]
           },
