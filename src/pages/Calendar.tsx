@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Download, Settings2, MapPin, Clock } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Download, Settings2, MapPin, Clock, GripVertical } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, parseISO, addDays, differenceInDays, startOfDay } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface CalendarEvent {
   id: string;
@@ -52,6 +53,12 @@ const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Drag and drop state
+  const [draggedEvent, setDraggedEvent] = useState<CalendarEvent | null>(null);
+  const [dropTargetDate, setDropTargetDate] = useState<Date | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{ event: CalendarEvent; targetDay: Date } | null>(null);
+  const [showRescheduleConfirm, setShowRescheduleConfirm] = useState(false);
   
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -201,6 +208,92 @@ END:VCALENDAR`;
     );
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, event: CalendarEvent) => {
+    setDraggedEvent(event);
+    e.dataTransfer.effectAllowed = 'move';
+    // Add a ghost image effect
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    setDraggedEvent(null);
+    setDropTargetDate(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, day: Date) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTargetDate(day);
+  };
+
+  const handleDragLeave = () => {
+    setDropTargetDate(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetDay: Date) => {
+    e.preventDefault();
+    if (!draggedEvent) return;
+
+    const originalStart = parseISO(draggedEvent.start_time);
+    const daysDiff = differenceInDays(startOfDay(targetDay), startOfDay(originalStart));
+    
+    // If same day, do nothing
+    if (daysDiff === 0) {
+      setDraggedEvent(null);
+      setDropTargetDate(null);
+      return;
+    }
+
+    // If moving more than 7 days, show confirmation
+    if (Math.abs(daysDiff) > 7) {
+      setPendingDrop({ event: draggedEvent, targetDay });
+      setShowRescheduleConfirm(true);
+    } else {
+      await rescheduleEvent(draggedEvent, targetDay);
+    }
+    
+    setDraggedEvent(null);
+    setDropTargetDate(null);
+  };
+
+  const rescheduleEvent = async (event: CalendarEvent, targetDay: Date) => {
+    const originalStart = parseISO(event.start_time);
+    const originalEnd = parseISO(event.end_time);
+    const daysDiff = differenceInDays(startOfDay(targetDay), startOfDay(originalStart));
+    
+    const newStart = addDays(originalStart, daysDiff);
+    const newEnd = addDays(originalEnd, daysDiff);
+
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .update({
+          start_time: newStart.toISOString(),
+          end_time: newEnd.toISOString(),
+        })
+        .eq('id', event.id);
+
+      if (error) throw error;
+      toast.success(`Event rescheduled to ${format(targetDay, 'MMM d')}`);
+      fetchEvents();
+    } catch (error) {
+      console.error('Error rescheduling event:', error);
+      toast.error('Failed to reschedule event');
+    }
+  };
+
+  const confirmReschedule = async () => {
+    if (pendingDrop) {
+      await rescheduleEvent(pendingDrop.event, pendingDrop.targetDay);
+    }
+    setShowRescheduleConfirm(false);
+    setPendingDrop(null);
+  };
+
   if (!user) {
     return null;
   }
@@ -347,12 +440,17 @@ END:VCALENDAR`;
               <div className="grid grid-cols-7 gap-1">
                 {/* Empty cells for days before start of month */}
                 {Array.from({ length: days[0].getDay() }).map((_, i) => (
-                  <div key={`empty-${i}`} className="h-24 bg-muted/20 rounded-lg" />
+                  <div 
+                    key={`empty-${i}`} 
+                    className="h-24 bg-muted/20 rounded-lg"
+                    onDragOver={(e) => e.preventDefault()}
+                  />
                 ))}
                 
                 {days.map((day) => {
                   const dayEvents = getEventsForDay(day);
                   const isToday = isSameDay(day, new Date());
+                  const isDropTarget = dropTargetDate && isSameDay(dropTargetDate, day);
                   
                   return (
                     <div
@@ -362,9 +460,16 @@ END:VCALENDAR`;
                           ? 'border-foreground/30 bg-foreground/5' 
                           : 'border-border/50 hover:border-border hover:bg-muted/30'
                         }
+                        ${isDropTarget 
+                          ? 'ring-2 ring-primary bg-primary/10 scale-[1.02]' 
+                          : ''
+                        }
                         hover:scale-[1.02] hover:shadow-md
                       `}
                       onClick={() => setSelectedDate(day)}
+                      onDragOver={(e) => handleDragOver(e, day)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, day)}
                     >
                       <div className={`text-sm font-medium mb-1 ${isToday ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
                         {format(day, 'd')}
@@ -374,18 +479,25 @@ END:VCALENDAR`;
                           <Tooltip key={event.id}>
                             <TooltipTrigger asChild>
                               <div
-                                className={`text-xs px-1.5 py-0.5 rounded truncate text-white font-light cursor-pointer
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, event)}
+                                onDragEnd={handleDragEnd}
+                                className={`text-xs px-1.5 py-0.5 rounded truncate text-white font-light 
+                                  cursor-grab active:cursor-grabbing
                                   ${eventTypeConfig[event.event_type]?.bg || 'bg-[#64748B]'}
-                                  transition-transform duration-200 hover:scale-105
-                                  animate-fade-in
+                                  transition-all duration-200 hover:scale-105
+                                  ${draggedEvent?.id === event.id ? 'opacity-50 scale-95' : ''}
+                                  animate-fade-in flex items-center gap-1
                                 `}
                               >
-                                {event.title}
+                                <GripVertical className="h-3 w-3 opacity-50 flex-shrink-0" />
+                                <span className="truncate">{event.title}</span>
                               </div>
                             </TooltipTrigger>
                             <TooltipContent side="right" className="max-w-xs">
                               <div className="space-y-1">
                                 <p className="font-medium">{event.title}</p>
+                                <p className="text-xs text-muted-foreground">Drag to reschedule</p>
                                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                   <Clock className="h-3 w-3" />
                                   {format(parseISO(event.start_time), 'h:mm a')}
@@ -441,6 +553,24 @@ END:VCALENDAR`;
             </Card>
           )}
         </div>
+
+        {/* Reschedule Confirmation Dialog */}
+        <AlertDialog open={showRescheduleConfirm} onOpenChange={setShowRescheduleConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reschedule Event?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You're moving "{pendingDrop?.event.title}" to{' '}
+                {pendingDrop && format(pendingDrop.targetDay, 'MMMM d, yyyy')}.
+                This is more than a week from the original date.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingDrop(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmReschedule}>Confirm Reschedule</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DashboardLayout>
     </>
   );
