@@ -243,6 +243,63 @@ export type Database = {
           },
         ]
       }
+      campaign_drafts: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          click_count: number | null
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          name: string
+          open_count: number | null
+          scheduled_at: string | null
+          sent_count: number | null
+          status: string | null
+          subject: string | null
+          target_audience: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          click_count?: number | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          name: string
+          open_count?: number | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          status?: string | null
+          subject?: string | null
+          target_audience?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          click_count?: number | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          name?: string
+          open_count?: number | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          status?: string | null
+          subject?: string | null
+          target_audience?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       campaigns: {
         Row: {
           approved_at: string | null
@@ -929,6 +986,137 @@ export type Database = {
           },
         ]
       }
+      partner_assignments: {
+        Row: {
+          access_level: string | null
+          assigned_at: string | null
+          assigned_by: string | null
+          family_id: string | null
+          id: string
+          notes: string | null
+          organization_id: string | null
+          partner_user_id: string
+          status: string | null
+        }
+        Insert: {
+          access_level?: string | null
+          assigned_at?: string | null
+          assigned_by?: string | null
+          family_id?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          partner_user_id: string
+          status?: string | null
+        }
+        Update: {
+          access_level?: string | null
+          assigned_at?: string | null
+          assigned_by?: string | null
+          family_id?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          partner_user_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_assignments_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_assignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "partner_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_messages: {
+        Row: {
+          assignment_id: string | null
+          content: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          sender_id: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          sender_id: string
+        }
+        Update: {
+          assignment_id?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_messages_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "partner_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_organizations: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          type: string
+          updated_at: string | null
+          verified: boolean | null
+          verified_at: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          phone?: string | null
+          type: string
+          updated_at?: string | null
+          verified?: boolean | null
+          verified_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          type?: string
+          updated_at?: string | null
+          verified?: boolean | null
+          verified_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -990,6 +1178,9 @@ export type Database = {
           notification_push: boolean | null
           notification_sms: boolean | null
           onboarding_completed: boolean | null
+          organization_name: string | null
+          partner_type: string | null
+          partner_verified: boolean | null
           phone: string | null
           preferred_currency: string | null
           timezone: string | null
@@ -1009,6 +1200,9 @@ export type Database = {
           notification_push?: boolean | null
           notification_sms?: boolean | null
           onboarding_completed?: boolean | null
+          organization_name?: string | null
+          partner_type?: string | null
+          partner_verified?: boolean | null
           phone?: string | null
           preferred_currency?: string | null
           timezone?: string | null
@@ -1028,6 +1222,9 @@ export type Database = {
           notification_push?: boolean | null
           notification_sms?: boolean | null
           onboarding_completed?: boolean | null
+          organization_name?: string | null
+          partner_type?: string | null
+          partner_verified?: boolean | null
           phone?: string | null
           preferred_currency?: string | null
           timezone?: string | null
@@ -1239,6 +1436,8 @@ export type Database = {
         | "finance_manager"
         | "lawyer"
         | "parent"
+        | "partner"
+        | "mediator"
       event_type:
         | "custody"
         | "event"
@@ -1391,6 +1590,8 @@ export const Constants = {
         "finance_manager",
         "lawyer",
         "parent",
+        "partner",
+        "mediator",
       ],
       event_type: [
         "custody",
