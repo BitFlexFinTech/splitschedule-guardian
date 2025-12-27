@@ -1213,7 +1213,10 @@ export type Database = {
           gdpr_consent_at: string | null
           id: string
           language: string | null
+          notification_calendar: boolean | null
           notification_email: boolean | null
+          notification_expenses: boolean | null
+          notification_messages: boolean | null
           notification_push: boolean | null
           notification_sms: boolean | null
           onboarding_completed: boolean | null
@@ -1235,7 +1238,10 @@ export type Database = {
           gdpr_consent_at?: string | null
           id?: string
           language?: string | null
+          notification_calendar?: boolean | null
           notification_email?: boolean | null
+          notification_expenses?: boolean | null
+          notification_messages?: boolean | null
           notification_push?: boolean | null
           notification_sms?: boolean | null
           onboarding_completed?: boolean | null
@@ -1257,7 +1263,10 @@ export type Database = {
           gdpr_consent_at?: string | null
           id?: string
           language?: string | null
+          notification_calendar?: boolean | null
           notification_email?: boolean | null
+          notification_expenses?: boolean | null
+          notification_messages?: boolean | null
           notification_push?: boolean | null
           notification_sms?: boolean | null
           onboarding_completed?: boolean | null
@@ -1462,6 +1471,10 @@ export type Database = {
       is_family_member: {
         Args: { _family_id: string; _user_id: string }
         Returns: boolean
+      }
+      notify_upcoming_events: {
+        Args: { hours_ahead?: number }
+        Returns: number
       }
       seed_demo_data_for_user: {
         Args: { demo_user_id: string }

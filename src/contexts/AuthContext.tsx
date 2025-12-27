@@ -19,6 +19,9 @@ interface Profile {
   notification_email: boolean | null;
   notification_push: boolean | null;
   notification_sms: boolean | null;
+  notification_calendar: boolean | null;
+  notification_messages: boolean | null;
+  notification_expenses: boolean | null;
   partner_type: string | null;
   organization_name: string | null;
   partner_verified: boolean | null;

@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { User, Bell, Globe, Shield, CreditCard, Users, Upload, Download, Trash2, FileText, Cookie, Loader2 } from 'lucide-react';
+import { User, Bell, Globe, Shield, CreditCard, Users, Upload, Download, Trash2, FileText, Cookie, Loader2, Calendar, MessageSquare, DollarSign } from 'lucide-react';
 import { APP_CONFIG, CURRENCIES } from '@/lib/config';
 
 const Settings: React.FC = () => {
@@ -35,6 +35,9 @@ const Settings: React.FC = () => {
     email: true,
     push: true,
     sms: false,
+    calendar: true,
+    messages: true,
+    expenses: true,
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -50,6 +53,14 @@ const Settings: React.FC = () => {
         preferred_currency: profile.preferred_currency || 'USD',
       });
       setGdprConsentGiven(!!profile.gdpr_consent_at);
+      setNotifications({
+        email: profile.notification_email !== false,
+        push: profile.notification_push !== false,
+        sms: profile.notification_sms === true,
+        calendar: profile.notification_calendar !== false,
+        messages: profile.notification_messages !== false,
+        expenses: profile.notification_expenses !== false,
+      });
     }
   }, [profile]);
 
@@ -228,6 +239,9 @@ const Settings: React.FC = () => {
         notification_email: notifications.email,
         notification_push: notifications.push,
         notification_sms: notifications.sms,
+        notification_calendar: notifications.calendar,
+        notification_messages: notifications.messages,
+        notification_expenses: notifications.expenses,
       }).eq('user_id', user.id);
 
       if (error) throw error;
@@ -489,39 +503,109 @@ const Settings: React.FC = () => {
               </CardTitle>
               <CardDescription>Configure how you receive updates</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Email Notifications</p>
-                  <p className="text-sm text-muted-foreground">Receive updates via email</p>
+            <CardContent className="space-y-6">
+              {/* Notification Categories */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Notification Categories</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      notifications.calendar
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border/50 hover:border-border'
+                    }`}
+                    onClick={() => setNotifications({ ...notifications, calendar: !notifications.calendar })}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <Calendar className="h-5 w-5 text-blue-500" />
+                      <Switch
+                        checked={notifications.calendar}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, calendar: checked })}
+                      />
+                    </div>
+                    <h5 className="font-medium text-sm">Calendar</h5>
+                    <p className="text-xs text-muted-foreground">Event reminders & schedule changes</p>
+                  </div>
+                  <div
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      notifications.messages
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border/50 hover:border-border'
+                    }`}
+                    onClick={() => setNotifications({ ...notifications, messages: !notifications.messages })}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <MessageSquare className="h-5 w-5 text-green-500" />
+                      <Switch
+                        checked={notifications.messages}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, messages: checked })}
+                      />
+                    </div>
+                    <h5 className="font-medium text-sm">Messages</h5>
+                    <p className="text-xs text-muted-foreground">New messages from co-parent</p>
+                  </div>
+                  <div
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      notifications.expenses
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border/50 hover:border-border'
+                    }`}
+                    onClick={() => setNotifications({ ...notifications, expenses: !notifications.expenses })}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <DollarSign className="h-5 w-5 text-amber-500" />
+                      <Switch
+                        checked={notifications.expenses}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, expenses: checked })}
+                      />
+                    </div>
+                    <h5 className="font-medium text-sm">Expenses</h5>
+                    <p className="text-xs text-muted-foreground">Expense updates & reimbursements</p>
+                  </div>
                 </div>
-                <Switch
-                  checked={notifications.email}
-                  onCheckedChange={(checked) => setNotifications({ ...notifications, email: checked })}
-                />
               </div>
+
               <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Push Notifications</p>
-                  <p className="text-sm text-muted-foreground">Receive push notifications</p>
+
+              {/* Delivery Methods */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Delivery Methods</h4>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Email Notifications</p>
+                      <p className="text-sm text-muted-foreground">Receive updates via email</p>
+                    </div>
+                    <Switch
+                      checked={notifications.email}
+                      onCheckedChange={(checked) => setNotifications({ ...notifications, email: checked })}
+                    />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Push Notifications</p>
+                      <p className="text-sm text-muted-foreground">Receive push notifications</p>
+                    </div>
+                    <Switch
+                      checked={notifications.push}
+                      onCheckedChange={(checked) => setNotifications({ ...notifications, push: checked })}
+                    />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">SMS Notifications</p>
+                      <p className="text-sm text-muted-foreground">Receive text messages</p>
+                    </div>
+                    <Switch
+                      checked={notifications.sms}
+                      onCheckedChange={(checked) => setNotifications({ ...notifications, sms: checked })}
+                    />
+                  </div>
                 </div>
-                <Switch
-                  checked={notifications.push}
-                  onCheckedChange={(checked) => setNotifications({ ...notifications, push: checked })}
-                />
               </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">SMS Notifications</p>
-                  <p className="text-sm text-muted-foreground">Receive text messages</p>
-                </div>
-                <Switch
-                  checked={notifications.sms}
-                  onCheckedChange={(checked) => setNotifications({ ...notifications, sms: checked })}
-                />
-              </div>
+
               <Button variant="outline" onClick={handleSaveNotifications}>
                 Save Notification Preferences
               </Button>
