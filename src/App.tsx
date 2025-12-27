@@ -34,6 +34,7 @@ import HeatMap from "./pages/HeatMap";
 import AdsControl from "./pages/AdsControl";
 import Partners from "./pages/Partners";
 import PartnersDashboard from "./pages/PartnersDashboard";
+import PaymentConnections from "./pages/PaymentConnections";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -75,6 +76,7 @@ const App = () => (
               <Route path="/ads" element={<AdsControl />} />
               <Route path="/partners" element={<Partners />} />
               <Route path="/partners-dashboard" element={<PartnersDashboard />} />
+              <Route path="/payment-connections" element={<PaymentConnections />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <CookieConsent />
