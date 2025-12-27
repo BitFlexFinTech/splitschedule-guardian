@@ -11,16 +11,18 @@ import { toast } from 'sonner';
 import { APP_CONFIG } from '@/lib/config';
 import { 
   Video, Phone, PhoneOff, Mic, MicOff, 
-  VideoOff, Clock, Calendar, Users 
+  VideoOff, Clock, Calendar, Users, Loader2 
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
-// Mock call history
-const mockCallHistory = [
-  { id: '1', type: 'video', duration: 1245, date: new Date('2024-03-15T14:30:00'), status: 'completed' },
-  { id: '2', type: 'audio', duration: 600, date: new Date('2024-03-14T10:00:00'), status: 'completed' },
-  { id: '3', type: 'video', duration: 0, date: new Date('2024-03-13T16:00:00'), status: 'missed' },
-];
+interface CallSession {
+  id: string;
+  call_type: string;
+  status: string;
+  duration_seconds: number | null;
+  started_at: string;
+  ended_at: string | null;
+}
 
 const formatDuration = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -35,7 +37,17 @@ const Calls: React.FC = () => {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callType, setCallType] = useState<'video' | 'audio'>('video');
+  const [callHistory, setCallHistory] = useState<CallSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (profile?.family_id) {
+      fetchCallHistory();
+    } else {
+      setIsLoading(false);
+    }
+  }, [profile?.family_id]);
 
   useEffect(() => {
     if (isInCall) {
@@ -56,6 +68,26 @@ const Calls: React.FC = () => {
     };
   }, [isInCall]);
 
+  const fetchCallHistory = async () => {
+    if (!profile?.family_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('call_sessions')
+        .select('*')
+        .eq('family_id', profile.family_id)
+        .order('started_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setCallHistory(data || []);
+    } catch (error) {
+      console.error('Error fetching call history:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleStartCall = async (type: 'video' | 'audio') => {
     if (!profile?.family_id) {
       toast.error('Please set up your family first');
@@ -66,18 +98,15 @@ const Calls: React.FC = () => {
     setIsInCall(true);
     toast.success(`${type === 'video' ? 'Video' : 'Audio'} call started${APP_CONFIG.MOCK_MODE ? ' (Mock Mode)' : ''}`);
 
-    // Save call to database
     if (profile.family_id && user) {
       try {
-        await supabase
-          .from('call_sessions')
-          .insert({
-            family_id: profile.family_id,
-            call_type: type,
-            initiated_by: user.id,
-            participants: [user.id],
-            status: 'active',
-          });
+        await supabase.from('call_sessions').insert({
+          family_id: profile.family_id,
+          call_type: type,
+          initiated_by: user.id,
+          participants: [user.id],
+          status: 'active',
+        });
       } catch (error) {
         console.error('Error saving call session:', error);
       }
@@ -92,7 +121,6 @@ const Calls: React.FC = () => {
     
     toast.success(`Call ended - Duration: ${formatDuration(duration)}`);
 
-    // Update call session in database
     if (profile?.family_id && user) {
       try {
         const { data: activeCalls } = await supabase
@@ -104,24 +132,21 @@ const Calls: React.FC = () => {
           .limit(1);
 
         if (activeCalls && activeCalls.length > 0) {
-          await supabase
-            .from('call_sessions')
-            .update({
-              status: 'completed',
-              ended_at: new Date().toISOString(),
-              duration_seconds: duration,
-            })
-            .eq('id', activeCalls[0].id);
+          await supabase.from('call_sessions').update({
+            status: 'completed',
+            ended_at: new Date().toISOString(),
+            duration_seconds: duration,
+          }).eq('id', activeCalls[0].id);
         }
+
+        fetchCallHistory();
       } catch (error) {
         console.error('Error updating call session:', error);
       }
     }
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <>
@@ -139,7 +164,7 @@ const Calls: React.FC = () => {
               <p className="text-muted-foreground">Video and audio calls with end-to-end security</p>
             </div>
             {APP_CONFIG.MOCK_MODE && (
-              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600">
+              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
                 Mock Mode
               </Badge>
             )}
@@ -147,10 +172,9 @@ const Calls: React.FC = () => {
 
           {/* Call Interface */}
           {isInCall ? (
-            <Card className="bg-gray-900 text-white">
+            <Card className="bg-gray-900 text-white border-0">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center">
-                  {/* Call Timer */}
                   <div className="mb-4">
                     <Badge variant="secondary" className="text-lg px-4 py-2">
                       <Clock className="h-4 w-4 mr-2" />
@@ -158,7 +182,6 @@ const Calls: React.FC = () => {
                     </Badge>
                   </div>
 
-                  {/* Video Area */}
                   <div className="w-full max-w-3xl aspect-video bg-gray-800 rounded-lg mb-6 flex items-center justify-center relative">
                     {isVideoOff || callType === 'audio' ? (
                       <div className="text-center">
@@ -175,19 +198,17 @@ const Calls: React.FC = () => {
                           <Video className="h-12 w-12 text-primary" />
                         </div>
                         <p className="text-gray-400">Connected to Co-Parent</p>
-                        <p className="text-xs text-gray-500 mt-2">
-                          {APP_CONFIG.MOCK_MODE && '(Simulated video feed)'}
-                        </p>
+                        {APP_CONFIG.MOCK_MODE && (
+                          <p className="text-xs text-gray-500 mt-2">(Simulated video feed)</p>
+                        )}
                       </div>
                     )}
 
-                    {/* Self view (small) */}
                     <div className="absolute bottom-4 right-4 w-32 h-24 bg-gray-700 rounded-lg flex items-center justify-center">
                       <span className="text-xs text-gray-400">You</span>
                     </div>
                   </div>
 
-                  {/* Call Controls */}
                   <div className="flex items-center gap-4">
                     <Button
                       variant={isMuted ? 'destructive' : 'secondary'}
@@ -223,10 +244,9 @@ const Calls: React.FC = () => {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Start Call Cards */}
-              <Card className="hover:border-primary transition-colors cursor-pointer" onClick={() => handleStartCall('video')}>
+              <Card className="glass-card hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => handleStartCall('video')}>
                 <CardContent className="p-8 text-center">
-                  <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                     <Video className="h-10 w-10 text-primary" />
                   </div>
                   <h3 className="text-xl font-semibold mb-2">Video Call</h3>
@@ -240,9 +260,9 @@ const Calls: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card className="hover:border-accent transition-colors cursor-pointer" onClick={() => handleStartCall('audio')}>
+              <Card className="glass-card hover:border-accent/50 transition-colors cursor-pointer group" onClick={() => handleStartCall('audio')}>
                 <CardContent className="p-8 text-center">
-                  <div className="h-20 w-20 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
+                  <div className="h-20 w-20 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                     <Phone className="h-10 w-10 text-accent" />
                   </div>
                   <h3 className="text-xl font-semibold mb-2">Audio Call</h3>
@@ -259,7 +279,7 @@ const Calls: React.FC = () => {
           )}
 
           {/* Scheduled Calls */}
-          <Card>
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
@@ -269,67 +289,78 @@ const Calls: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-20" />
                 <p>No scheduled calls</p>
                 <p className="text-sm">Schedule calls through the calendar</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Call History */}
-          <Card>
+          {/* Call History from Database */}
+          <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Call History
               </CardTitle>
-              <CardDescription>Recent calls</CardDescription>
+              <CardDescription>Recent calls with your co-parent</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {mockCallHistory.map((call) => (
-                  <div
-                    key={call.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
-                  >
-                    <div className="flex items-center gap-4">
-                      <Avatar>
-                        <AvatarFallback>CP</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">Co-Parent</p>
-                          {call.type === 'video' ? (
-                            <Video className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                          )}
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : callHistory.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Phone className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p>No call history yet</p>
+                  <p className="text-sm">Start your first call above</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {callHistory.map((call) => (
+                    <div key={call.id} className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <Avatar>
+                          <AvatarFallback>CP</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">Co-Parent</p>
+                            {call.call_type === 'video' ? (
+                              <Video className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {format(parseISO(call.started_at), 'MMM d, yyyy h:mm a')}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {format(call.date, 'MMM d, yyyy h:mm a')}
-                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {call.status === 'completed' && call.duration_seconds ? (
+                          <span className="text-sm text-muted-foreground">
+                            {formatDuration(call.duration_seconds)}
+                          </span>
+                        ) : call.status === 'active' ? (
+                          <Badge className="bg-green-500/10 text-green-600">Active</Badge>
+                        ) : (
+                          <Badge variant="destructive">Missed</Badge>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      {call.status === 'completed' ? (
-                        <span className="text-sm text-muted-foreground">
-                          {formatDuration(call.duration)}
-                        </span>
-                      ) : (
-                        <Badge variant="destructive">Missed</Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* No Family Warning */}
           {!profile?.family_id && (
-            <Card className="border-warning bg-warning/10">
+            <Card className="border-yellow-500/30 bg-yellow-500/5">
               <CardContent className="py-4">
-                <p className="text-warning-foreground">
+                <p className="text-yellow-600">
                   You need to create or join a family to make calls. Go to Settings to set up your family.
                 </p>
               </CardContent>

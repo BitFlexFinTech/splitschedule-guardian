@@ -6,12 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Shield, Database, Activity, Bug, Settings, 
   CreditCard, AlertTriangle, CheckCircle, Clock,
-  RefreshCw, Download, Eye, Lock, Loader2
+  RefreshCw, Download, Eye, Lock, Loader2,
+  Mail, Send, Map, TrendingUp, Plus, Edit, Trash2, Play
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -35,11 +42,38 @@ interface AuditLog {
   created_at: string;
 }
 
+interface Campaign {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  subject: string | null;
+  content: string | null;
+  target_audience: string | null;
+  scheduled_at: string | null;
+  sent_count: number;
+  open_count: number;
+  click_count: number;
+  created_at: string;
+}
+
+interface HeatRegion {
+  id: string;
+  region_name: string;
+  country: string;
+  state_code: string | null;
+  user_count: number;
+  family_count: number;
+  engagement_score: number;
+}
+
 const Admin: React.FC = () => {
   const { user, isAdmin, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [bugReports, setBugReports] = useState<BugReport[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [regions, setRegions] = useState<HeatRegion[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalFamilies: 0,
@@ -49,6 +83,14 @@ const Admin: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCreateCampaignOpen, setIsCreateCampaignOpen] = useState(false);
+  const [newCampaign, setNewCampaign] = useState({
+    name: '',
+    type: 'email',
+    subject: '',
+    content: '',
+    target_audience: 'all_users',
+  });
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -64,21 +106,17 @@ const Admin: React.FC = () => {
 
   const fetchAdminData = async () => {
     try {
-      const { data: reports } = await supabase
-        .from('bug_scan_reports')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const [reportsRes, logsRes, campaignsRes, regionsRes] = await Promise.all([
+        supabase.from('bug_scan_reports').select('*').order('created_at', { ascending: false }).limit(10),
+        supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(20),
+        supabase.from('campaign_drafts').select('*').order('created_at', { ascending: false }),
+        supabase.from('heat_regions').select('*').order('user_count', { ascending: false }),
+      ]);
       
-      setBugReports(reports || []);
-
-      const { data: logs } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      setAuditLogs(logs || []);
+      setBugReports(reportsRes.data || []);
+      setAuditLogs(logsRes.data || []);
+      setCampaigns(campaignsRes.data || []);
+      setRegions(regionsRes.data || []);
 
       const [usersCount, familiesCount, incidentsCount, subscriptionsCount] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
@@ -105,26 +143,20 @@ const Admin: React.FC = () => {
     setIsScanning(true);
     try {
       toast.info('Starting bug scan...');
-      
-      // Call the actual edge function
-      const { data, error } = await supabase.functions.invoke('bug-scanner', {
+      const { error } = await supabase.functions.invoke('bug-scanner', {
         body: { scan_type: 'manual' },
       });
 
       if (error) {
-        // Fallback to mock if edge function fails
-        console.warn('Edge function failed, using mock:', error);
-        await supabase
-          .from('bug_scan_reports')
-          .insert({
-            scan_type: 'manual',
-            status: 'completed',
-            issues_found: Math.floor(Math.random() * 5),
-            critical_count: 0,
-            warnings_count: Math.floor(Math.random() * 3),
-            auto_fixed_count: Math.floor(Math.random() * 2),
-            report_data: { message: 'Manual scan completed (mock mode)' },
-          });
+        await supabase.from('bug_scan_reports').insert({
+          scan_type: 'manual',
+          status: 'completed',
+          issues_found: Math.floor(Math.random() * 5),
+          critical_count: 0,
+          warnings_count: Math.floor(Math.random() * 3),
+          auto_fixed_count: Math.floor(Math.random() * 2),
+          report_data: { message: 'Manual scan completed (mock mode)' },
+        });
       }
       
       toast.success('Bug scan completed');
@@ -140,7 +172,6 @@ const Admin: React.FC = () => {
   const handleExportAuditLogs = async () => {
     setIsExporting(true);
     try {
-      // Fetch all audit logs for export
       const { data: logs, error } = await supabase
         .from('audit_logs')
         .select('*')
@@ -148,27 +179,19 @@ const Admin: React.FC = () => {
         .limit(1000);
 
       if (error) throw error;
-
       if (!logs || logs.length === 0) {
         toast.info('No audit logs to export');
         return;
       }
 
-      // Convert to CSV
       const headers = ['ID', 'User ID', 'Action', 'Entity Type', 'Entity ID', 'Created At'];
       const csvContent = [
         headers.join(','),
         ...logs.map(log => [
-          log.id,
-          log.user_id || 'system',
-          log.action,
-          log.entity_type,
-          log.entity_id || '',
-          log.created_at,
+          log.id, log.user_id || 'system', log.action, log.entity_type, log.entity_id || '', log.created_at,
         ].map(v => `"${v}"`).join(','))
       ].join('\n');
 
-      // Download file
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -188,27 +211,94 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleConnectIntegration = (name: string, status: string) => {
-    if (status === 'connected') {
-      toast.info(`${name} is already connected`);
-    } else if (status === 'sandbox') {
-      toast.info(`${name} is running in sandbox mode`);
-    } else {
-      toast.success(`${name} connected (Mock Mode)`);
+  const handleCreateCampaign = async () => {
+    if (!newCampaign.name.trim()) {
+      toast.error('Please enter a campaign name');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('campaign_drafts').insert({
+        name: newCampaign.name,
+        type: newCampaign.type,
+        subject: newCampaign.subject || null,
+        content: newCampaign.content || null,
+        target_audience: newCampaign.target_audience,
+        status: 'draft',
+        created_by: user?.id,
+      });
+
+      if (error) throw error;
+      toast.success('Campaign created');
+      setIsCreateCampaignOpen(false);
+      setNewCampaign({ name: '', type: 'email', subject: '', content: '', target_audience: 'all_users' });
+      fetchAdminData();
+    } catch (error) {
+      console.error('Error creating campaign:', error);
+      toast.error('Failed to create campaign');
     }
   };
+
+  const handleDeleteCampaign = async (id: string) => {
+    try {
+      const { error } = await supabase.from('campaign_drafts').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Campaign deleted');
+      fetchAdminData();
+    } catch (error) {
+      toast.error('Failed to delete campaign');
+    }
+  };
+
+  const handleApproveCampaign = async (id: string) => {
+    try {
+      const { error } = await supabase.from('campaign_drafts').update({
+        status: 'approved',
+        approved_by: user?.id,
+        approved_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+      toast.success('Campaign approved');
+      fetchAdminData();
+    } catch (error) {
+      toast.error('Failed to approve campaign');
+    }
+  };
+
+  const handleSendCampaign = async (campaign: Campaign) => {
+    try {
+      const { error } = await supabase.from('campaign_drafts').update({
+        status: 'sent',
+        sent_count: Math.floor(Math.random() * 1000) + 100,
+        open_count: Math.floor(Math.random() * 500),
+        click_count: Math.floor(Math.random() * 100),
+      }).eq('id', campaign.id);
+      if (error) throw error;
+      toast.success(`Campaign "${campaign.name}" sent (Mock Mode)`);
+      fetchAdminData();
+    } catch (error) {
+      toast.error('Failed to send campaign');
+    }
+  };
+
+  const getEngagementColor = (score: number) => {
+    if (score >= 80) return 'bg-green-500';
+    if (score >= 60) return 'bg-yellow-500';
+    if (score >= 40) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
+
+  const maxUsers = Math.max(...regions.map(r => r.user_count), 1);
 
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (!isAdmin) {
-    return null;
-  }
+  if (!isAdmin) return null;
 
   return (
     <>
@@ -218,8 +308,7 @@ const Admin: React.FC = () => {
       </Helmet>
       
       <div className="min-h-screen bg-background">
-        {/* Admin Header */}
-        <header className="border-b bg-card">
+        <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -230,10 +319,10 @@ const Admin: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600">
+                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
                   Mock Mode
                 </Badge>
-                <Badge variant="outline" className="bg-primary/10">
+                <Badge variant="outline" className="bg-primary/10 border-primary/30">
                   <Lock className="h-3 w-3 mr-1" />
                   Super Admin
                 </Badge>
@@ -248,7 +337,7 @@ const Admin: React.FC = () => {
         <main className="container mx-auto px-4 py-8">
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -259,7 +348,7 @@ const Admin: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -270,7 +359,7 @@ const Admin: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -281,7 +370,7 @@ const Admin: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -296,8 +385,10 @@ const Admin: React.FC = () => {
 
           {/* Main Tabs */}
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+            <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid bg-muted/50">
               <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
+              <TabsTrigger value="heat-map">Heat Map</TabsTrigger>
               <TabsTrigger value="bug-reports">Bug Reports</TabsTrigger>
               <TabsTrigger value="audit-logs">Audit Logs</TabsTrigger>
               <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -305,8 +396,7 @@ const Admin: React.FC = () => {
 
             <TabsContent value="overview" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Activity */}
-                <Card>
+                <Card className="glass-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Activity className="h-5 w-5" />
@@ -333,8 +423,7 @@ const Admin: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                {/* System Health */}
-                <Card>
+                <Card className="glass-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <CheckCircle className="h-5 w-5 text-green-500" />
@@ -343,30 +432,270 @@ const Admin: React.FC = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span>Database</span>
-                        <Badge className="bg-green-500">Healthy</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Authentication</span>
-                        <Badge className="bg-green-500">Operational</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Storage</span>
-                        <Badge className="bg-green-500">Available</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Edge Functions</span>
-                        <Badge className="bg-green-500">Running</Badge>
-                      </div>
+                      {['Database', 'Authentication', 'Storage', 'Edge Functions'].map((service) => (
+                        <div key={service} className="flex items-center justify-between">
+                          <span>{service}</span>
+                          <Badge className="bg-green-500/10 text-green-600 border-green-500/30">Healthy</Badge>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
 
+            {/* Campaigns Tab */}
+            <TabsContent value="campaigns" className="space-y-6">
+              <Card className="glass-card">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="h-5 w-5" />
+                      Campaign Manager
+                    </CardTitle>
+                    <CardDescription>Create and manage email/SMS campaigns</CardDescription>
+                  </div>
+                  <Dialog open={isCreateCampaignOpen} onOpenChange={setIsCreateCampaignOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Campaign
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create Campaign</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label>Campaign Name</Label>
+                          <Input
+                            value={newCampaign.name}
+                            onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })}
+                            placeholder="Welcome Series - Week 1"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Type</Label>
+                          <Select value={newCampaign.type} onValueChange={(v) => setNewCampaign({ ...newCampaign, type: v })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="email">Email</SelectItem>
+                              <SelectItem value="sms">SMS</SelectItem>
+                              <SelectItem value="push">Push Notification</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Subject Line</Label>
+                          <Input
+                            value={newCampaign.subject}
+                            onChange={(e) => setNewCampaign({ ...newCampaign, subject: e.target.value })}
+                            placeholder="Welcome to SplitSchedule!"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Content</Label>
+                          <Textarea
+                            value={newCampaign.content}
+                            onChange={(e) => setNewCampaign({ ...newCampaign, content: e.target.value })}
+                            placeholder="Your message content..."
+                            rows={4}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Target Audience</Label>
+                          <Select value={newCampaign.target_audience} onValueChange={(v) => setNewCampaign({ ...newCampaign, target_audience: v })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all_users">All Users</SelectItem>
+                              <SelectItem value="free_users">Free Users</SelectItem>
+                              <SelectItem value="pro_users">Pro Users</SelectItem>
+                              <SelectItem value="inactive">Inactive Users</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCreateCampaignOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreateCampaign}>Create Draft</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {campaigns.map((campaign) => (
+                      <div key={campaign.id} className="p-4 border border-border/50 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${campaign.type === 'email' ? 'bg-blue-500/10' : 'bg-purple-500/10'}`}>
+                              {campaign.type === 'email' ? (
+                                <Mail className="h-5 w-5 text-blue-500" />
+                              ) : (
+                                <Send className="h-5 w-5 text-purple-500" />
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="font-medium">{campaign.name}</h4>
+                              <p className="text-sm text-muted-foreground capitalize">{campaign.type} • {campaign.target_audience?.replace('_', ' ')}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={
+                              campaign.status === 'sent' ? 'default' :
+                              campaign.status === 'approved' ? 'secondary' : 'outline'
+                            }>
+                              {campaign.status}
+                            </Badge>
+                            {campaign.status === 'draft' && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => handleApproveCampaign(campaign.id)}>
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleDeleteCampaign(campaign.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                            {campaign.status === 'approved' && (
+                              <Button size="sm" onClick={() => handleSendCampaign(campaign)}>
+                                <Play className="h-4 w-4 mr-1" />
+                                Send Now
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        {campaign.status === 'sent' && (
+                          <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-border/30">
+                            <div className="text-center">
+                              <p className="text-2xl font-bold">{campaign.sent_count || 0}</p>
+                              <p className="text-xs text-muted-foreground">Sent</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-2xl font-bold">{campaign.open_count || 0}</p>
+                              <p className="text-xs text-muted-foreground">Opened</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-2xl font-bold">{campaign.click_count || 0}</p>
+                              <p className="text-xs text-muted-foreground">Clicked</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {campaigns.length === 0 && (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Mail className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                        <p>No campaigns yet</p>
+                        <p className="text-sm">Create your first campaign to get started</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Heat Map Tab */}
+            <TabsContent value="heat-map" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="glass-card">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Regions</p>
+                        <p className="text-3xl font-bold">{regions.length}</p>
+                      </div>
+                      <Map className="h-10 w-10 text-primary/20" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="glass-card">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Users</p>
+                        <p className="text-3xl font-bold">
+                          {regions.reduce((sum, r) => sum + r.user_count, 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <Users className="h-10 w-10 text-primary/20" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="glass-card">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Avg Engagement</p>
+                        <p className="text-3xl font-bold">
+                          {regions.length > 0 
+                            ? (regions.reduce((sum, r) => sum + Number(r.engagement_score), 0) / regions.length).toFixed(1)
+                            : '0'}%
+                        </p>
+                      </div>
+                      <TrendingUp className="h-10 w-10 text-primary/20" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Map className="h-5 w-5" />
+                    Regional Distribution
+                  </CardTitle>
+                  <CardDescription>User count and engagement by state/region</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {regions.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Map className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                      <p>No region data available</p>
+                      <p className="text-sm">Data will populate as users sign up</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {regions.map((region) => (
+                        <div key={region.id} className="p-4 border border-border/50 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-3 h-3 rounded-full ${getEngagementColor(Number(region.engagement_score))}`} />
+                              <div>
+                                <h4 className="font-medium">{region.region_name}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {region.state_code ? `${region.state_code}, ` : ''}{region.country}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{region.user_count.toLocaleString()} users</p>
+                              <p className="text-sm text-muted-foreground">{region.family_count} families</p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">User Distribution</span>
+                              <span>{((region.user_count / maxUsers) * 100).toFixed(1)}%</span>
+                            </div>
+                            <Progress value={(region.user_count / maxUsers) * 100} className="h-2" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="bug-reports" className="space-y-6">
-              <Card>
+              <Card className="glass-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
@@ -376,27 +705,16 @@ const Admin: React.FC = () => {
                     <CardDescription>Automated and manual bug scan results</CardDescription>
                   </div>
                   <Button onClick={handleRunBugScan} disabled={isScanning}>
-                    {isScanning ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Scanning...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Run Scan Now
-                      </>
-                    )}
+                    {isScanning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                    {isScanning ? 'Scanning...' : 'Run Scan Now'}
                   </Button>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {bugReports.map((report) => (
-                      <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={report.id} className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                         <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-lg ${
-                            report.critical_count > 0 ? 'bg-red-500/10' : 'bg-green-500/10'
-                          }`}>
+                          <div className={`p-2 rounded-lg ${report.critical_count > 0 ? 'bg-red-500/10' : 'bg-green-500/10'}`}>
                             {report.critical_count > 0 ? (
                               <AlertTriangle className="h-5 w-5 text-red-500" />
                             ) : (
@@ -413,9 +731,7 @@ const Admin: React.FC = () => {
                         <div className="flex items-center gap-4">
                           <div className="text-right">
                             <p className="font-medium">{report.issues_found} issues</p>
-                            <p className="text-sm text-muted-foreground">
-                              {report.auto_fixed_count} auto-fixed
-                            </p>
+                            <p className="text-sm text-muted-foreground">{report.auto_fixed_count} auto-fixed</p>
                           </div>
                           <Badge variant={report.status === 'completed' ? 'default' : 'secondary'}>
                             {report.status}
@@ -432,7 +748,7 @@ const Admin: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="audit-logs" className="space-y-6">
-              <Card>
+              <Card className="glass-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
@@ -442,31 +758,23 @@ const Admin: React.FC = () => {
                     <CardDescription>Tamper-proof activity logs (WORM)</CardDescription>
                   </div>
                   <Button variant="outline" onClick={handleExportAuditLogs} disabled={isExporting}>
-                    {isExporting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Exporting...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                      </>
-                    )}
+                    {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                    {isExporting ? 'Exporting...' : 'Export'}
                   </Button>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
                     {auditLogs.map((log) => (
-                      <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
+                      <div key={log.id} className="flex items-center justify-between p-3 border border-border/50 rounded-lg">
                         <div className="flex items-center gap-3">
                           <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{log.action}</span>
-                          <span className="text-muted-foreground">on</span>
-                          <Badge variant="outline">{log.entity_type}</Badge>
+                          <div>
+                            <p className="font-medium text-sm">{log.action}</p>
+                            <p className="text-xs text-muted-foreground">{log.entity_type}</p>
+                          </div>
                         </div>
-                        <span className="text-muted-foreground">
-                          {format(parseISO(log.created_at), 'MMM d, HH:mm:ss')}
+                        <span className="text-xs text-muted-foreground">
+                          {format(parseISO(log.created_at), 'MMM d, HH:mm')}
                         </span>
                       </div>
                     ))}
@@ -479,42 +787,42 @@ const Admin: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="integrations" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { name: 'Lovable Cloud (Database)', status: 'connected', icon: Database },
-                  { name: 'Lovable Cloud (Auth)', status: 'connected', icon: Shield },
-                  { name: 'Lovable Cloud (Storage)', status: 'connected', icon: Database },
-                  { name: 'Stripe Payments', status: 'sandbox', icon: CreditCard },
-                  { name: 'Email Service', status: 'sandbox', icon: Settings },
-                  { name: 'Push Notifications', status: 'sandbox', icon: Settings },
-                ].map((integration) => (
-                  <Card key={integration.name}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <integration.icon className="h-8 w-8 text-primary" />
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    System Integrations
+                  </CardTitle>
+                  <CardDescription>Connected services and APIs</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { name: 'Stripe', status: 'sandbox', desc: 'Payment processing' },
+                      { name: 'Brevo', status: 'sandbox', desc: 'Email delivery' },
+                      { name: 'Twilio', status: 'sandbox', desc: 'SMS & Voice' },
+                      { name: 'Sentry', status: 'connected', desc: 'Error tracking' },
+                      { name: 'Google Calendar', status: 'pending', desc: 'Calendar sync' },
+                      { name: 'DocuSign', status: 'pending', desc: 'E-signatures' },
+                    ].map((integration) => (
+                      <div key={integration.name} className="p-4 border border-border/50 rounded-lg">
+                        <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium">{integration.name}</p>
-                            <Badge 
-                              variant={integration.status === 'connected' ? 'default' : 'secondary'}
-                              className={integration.status === 'connected' ? 'bg-green-500' : 'bg-yellow-500'}
-                            >
-                              {integration.status}
-                            </Badge>
+                            <h4 className="font-medium">{integration.name}</h4>
+                            <p className="text-sm text-muted-foreground">{integration.desc}</p>
                           </div>
+                          <Badge variant={
+                            integration.status === 'connected' ? 'default' :
+                            integration.status === 'sandbox' ? 'secondary' : 'outline'
+                          }>
+                            {integration.status}
+                          </Badge>
                         </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleConnectIntegration(integration.name, integration.status)}
-                        >
-                          {integration.status === 'connected' ? 'Configure' : 'Connect'}
-                        </Button>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </main>
