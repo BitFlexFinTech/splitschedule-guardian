@@ -24,6 +24,7 @@ import {
   HelpCircle,
   UserPlus,
   ShieldCheck,
+  Wallet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -38,12 +39,12 @@ const navItems = [
   { name: "Info Bank", href: "/info-bank", icon: Baby },
   { name: "Expenses", href: "/expenses", icon: DollarSign },
   { name: "Payments", href: "/payments", icon: CreditCard },
+  { name: "Payment Methods", href: "/payment-connections", icon: Wallet },
   { name: "Messages", href: "/messages", icon: MessageSquare },
   { name: "Calls", href: "/calls", icon: Phone },
   { name: "Documents", href: "/file-vault", icon: FileText },
   { name: "Incidents", href: "/incident-log", icon: Shield },
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Integrations", href: "/integrations", icon: Plug },
 ];
 
 const bottomNavItems = [
@@ -111,13 +112,13 @@ const DashboardLayout = ({ children, user }: DashboardLayoutProps) => {
                   key={item.name}
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-light transition-colors ${
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   }`}
                 >
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className="w-5 h-5" strokeWidth={1.5} />
                   {item.name}
                 </Link>
               );

@@ -1434,6 +1434,54 @@ export type Database = {
           },
         ]
       }
+      user_payment_methods: {
+        Row: {
+          account_last_four: string | null
+          account_name: string | null
+          country: string | null
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          is_verified: boolean | null
+          metadata: Json | null
+          method_type: string
+          provider: string
+          provider_account_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_last_four?: string | null
+          account_name?: string | null
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          metadata?: Json | null
+          method_type: string
+          provider: string
+          provider_account_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_last_four?: string | null
+          account_name?: string | null
+          country?: string | null
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          metadata?: Json | null
+          method_type?: string
+          provider?: string
+          provider_account_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
