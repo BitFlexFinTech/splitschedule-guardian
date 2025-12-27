@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { CookieConsent } from "@/components/ui/CookieConsent";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -30,6 +31,8 @@ import LawyerDashboard from "./pages/LawyerDashboard";
 import FreeLog from "./pages/FreeLog";
 import HeatMap from "./pages/HeatMap";
 import AdsControl from "./pages/AdsControl";
+import Partners from "./pages/Partners";
+import PartnersDashboard from "./pages/PartnersDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -68,8 +71,11 @@ const App = () => (
               <Route path="/free-log" element={<FreeLog />} />
               <Route path="/heatmap" element={<HeatMap />} />
               <Route path="/ads" element={<AdsControl />} />
+              <Route path="/partners" element={<Partners />} />
+              <Route path="/partners-dashboard" element={<PartnersDashboard />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <CookieConsent />
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>

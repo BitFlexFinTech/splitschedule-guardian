@@ -16,7 +16,7 @@ interface Profile {
 }
 
 interface UserRole {
-  role: 'superadmin' | 'support_agent' | 'finance_manager' | 'lawyer' | 'parent';
+  role: 'superadmin' | 'support_agent' | 'finance_manager' | 'lawyer' | 'parent' | 'partner' | 'mediator';
 }
 
 interface AuthContextType {
