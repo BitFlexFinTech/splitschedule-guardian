@@ -13,6 +13,15 @@ interface Profile {
   phone: string | null;
   language: string;
   timezone: string;
+  preferred_currency: string | null;
+  gdpr_consent_at: string | null;
+  onboarding_completed: boolean | null;
+  notification_email: boolean | null;
+  notification_push: boolean | null;
+  notification_sms: boolean | null;
+  partner_type: string | null;
+  organization_name: string | null;
+  partner_verified: boolean | null;
 }
 
 interface UserRole {

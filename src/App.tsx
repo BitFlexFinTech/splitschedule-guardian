@@ -13,6 +13,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import InfoBank from "./pages/InfoBank";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
+import CalendarManagement from "./pages/CalendarManagement";
 import Expenses from "./pages/Expenses";
 import Messages from "./pages/Messages";
 import IncidentLog from "./pages/IncidentLog";
@@ -53,6 +54,7 @@ const App = () => (
               <Route path="/info-bank" element={<InfoBank />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/calendar" element={<Calendar />} />
+              <Route path="/calendar-management" element={<CalendarManagement />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/incident-log" element={<IncidentLog />} />

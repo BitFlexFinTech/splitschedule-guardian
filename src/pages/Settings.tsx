@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { User, Bell, Globe, Shield, CreditCard, Users, Upload, Download, Trash2, FileText, Cookie, Loader2 } from 'lucide-react';
-import { APP_CONFIG } from '@/lib/config';
+import { APP_CONFIG, CURRENCIES } from '@/lib/config';
 
 const Settings: React.FC = () => {
   const { user, profile } = useAuth();
@@ -239,11 +239,11 @@ const Settings: React.FC = () => {
 
   if (!user) return null;
 
-  const currencies = APP_CONFIG.CURRENCIES || [
-    { code: 'USD', symbol: '$', name: 'US Dollar' },
-    { code: 'GBP', symbol: '£', name: 'British Pound' },
-    { code: 'EUR', symbol: '€', name: 'Euro' },
-  ];
+  const currencies = Object.entries(CURRENCIES).map(([code, data]) => ({
+    code,
+    symbol: data.symbol,
+    name: data.name,
+  }));
 
   return (
     <>

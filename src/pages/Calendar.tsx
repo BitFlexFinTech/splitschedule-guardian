@@ -10,15 +10,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Download, ArrowLeftRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Download, Settings2, MapPin, Clock } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
+import { Link } from 'react-router-dom';
 
 interface CalendarEvent {
   id: string;
   title: string;
   description: string | null;
-  event_type: 'custody' | 'event' | 'holiday' | 'medical' | 'school' | 'activity';
+  event_type: string;
   start_time: string;
   end_time: string;
   all_day: boolean;
@@ -27,13 +29,20 @@ interface CalendarEvent {
   assigned_to: string | null;
 }
 
-const eventTypeColors: Record<string, string> = {
-  custody: 'bg-primary',
-  event: 'bg-accent',
-  holiday: 'bg-green-500',
-  medical: 'bg-red-500',
-  school: 'bg-yellow-500',
-  activity: 'bg-purple-500',
+// Bright, flat, full spectrum colors for calendar events
+const eventTypeConfig: Record<string, { bg: string; label: string; hex: string }> = {
+  custody: { bg: 'bg-[#3B82F6]', label: 'Custody', hex: '#3B82F6' },
+  pickup: { bg: 'bg-[#10B981]', label: 'Pickup', hex: '#10B981' },
+  dropoff: { bg: 'bg-[#F59E0B]', label: 'Drop-off', hex: '#F59E0B' },
+  birthday: { bg: 'bg-[#EC4899]', label: 'Birthday', hex: '#EC4899' },
+  holiday: { bg: 'bg-[#8B5CF6]', label: 'Holiday', hex: '#8B5CF6' },
+  activity: { bg: 'bg-[#06B6D4]', label: 'Activity', hex: '#06B6D4' },
+  medical: { bg: 'bg-[#EF4444]', label: 'Medical', hex: '#EF4444' },
+  school: { bg: 'bg-[#84CC16]', label: 'School', hex: '#84CC16' },
+  appointment: { bg: 'bg-[#F97316]', label: 'Appointment', hex: '#F97316' },
+  event: { bg: 'bg-[#6366F1]', label: 'Event', hex: '#6366F1' },
+  reminder: { bg: 'bg-[#A855F7]', label: 'Reminder', hex: '#A855F7' },
+  other: { bg: 'bg-[#64748B]', label: 'Other', hex: '#64748B' },
 };
 
 const Calendar: React.FC = () => {
@@ -47,7 +56,7 @@ const Calendar: React.FC = () => {
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
-    event_type: 'custody' as const,
+    event_type: 'custody',
     start_time: '',
     end_time: '',
     all_day: false,
@@ -112,6 +121,12 @@ const Calendar: React.FC = () => {
       return;
     }
 
+    // Map to valid database event types
+    const validEventTypes = ['custody', 'event', 'holiday', 'medical', 'school', 'activity'] as const;
+    const dbEventType = validEventTypes.includes(newEvent.event_type as any) 
+      ? newEvent.event_type as typeof validEventTypes[number]
+      : 'event';
+
     try {
       const { error } = await supabase
         .from('calendar_events')
@@ -120,12 +135,12 @@ const Calendar: React.FC = () => {
           created_by: user.id,
           title: newEvent.title,
           description: newEvent.description || null,
-          event_type: newEvent.event_type,
+          event_type: dbEventType,
           start_time: newEvent.start_time,
           end_time: newEvent.end_time,
           all_day: newEvent.all_day,
           location: newEvent.location || null,
-          color: eventTypeColors[newEvent.event_type],
+          color: eventTypeConfig[newEvent.event_type]?.hex || '#64748B',
         });
 
       if (error) throw error;
@@ -202,28 +217,34 @@ END:VCALENDAR`;
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Custody Calendar</h1>
-              <p className="text-muted-foreground">Manage your custody schedule and events</p>
+              <h1 className="text-3xl font-medium text-foreground tracking-tight">Custody Calendar</h1>
+              <p className="text-muted-foreground font-light">Manage your custody schedule and events</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleExport}>
+              <Button variant="outline" size="sm" asChild className="font-light">
+                <Link to="/calendar-management">
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Manage
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExport} className="font-light">
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
               <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-primary/90">
+                  <Button size="sm">
                     <Plus className="h-4 w-4 mr-2" />
                     Add Event
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
-                    <DialogTitle>Create New Event</DialogTitle>
+                    <DialogTitle className="font-medium">Create New Event</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="title">Title</Label>
+                      <Label htmlFor="title" className="font-light">Title</Label>
                       <Input
                         id="title"
                         value={newEvent.title}
@@ -232,27 +253,29 @@ END:VCALENDAR`;
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="event_type">Event Type</Label>
+                      <Label htmlFor="event_type" className="font-light">Event Type</Label>
                       <Select
                         value={newEvent.event_type}
-                        onValueChange={(value: any) => setNewEvent({ ...newEvent, event_type: value })}
+                        onValueChange={(value) => setNewEvent({ ...newEvent, event_type: value })}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="custody">Custody</SelectItem>
-                          <SelectItem value="event">Event</SelectItem>
-                          <SelectItem value="holiday">Holiday</SelectItem>
-                          <SelectItem value="medical">Medical</SelectItem>
-                          <SelectItem value="school">School</SelectItem>
-                          <SelectItem value="activity">Activity</SelectItem>
+                          {Object.entries(eventTypeConfig).map(([key, config]) => (
+                            <SelectItem key={key} value={key}>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${config.bg}`} />
+                                {config.label}
+                              </div>
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="start_time">Start</Label>
+                        <Label htmlFor="start_time" className="font-light">Start</Label>
                         <Input
                           id="start_time"
                           type="datetime-local"
@@ -261,7 +284,7 @@ END:VCALENDAR`;
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="end_time">End</Label>
+                        <Label htmlFor="end_time" className="font-light">End</Label>
                         <Input
                           id="end_time"
                           type="datetime-local"
@@ -271,7 +294,7 @@ END:VCALENDAR`;
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="location">Location</Label>
+                      <Label htmlFor="location" className="font-light">Location</Label>
                       <Input
                         id="location"
                         value={newEvent.location}
@@ -280,7 +303,7 @@ END:VCALENDAR`;
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="description" className="font-light">Description</Label>
                       <Textarea
                         id="description"
                         value={newEvent.description}
@@ -298,12 +321,12 @@ END:VCALENDAR`;
           </div>
 
           {/* Calendar Navigation */}
-          <Card>
+          <Card className="glass-card">
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <Button variant="ghost" size="icon" onClick={() => setCurrentDate(subMonths(currentDate, 1))}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <CardTitle className="text-xl">
+              <CardTitle className="text-xl font-medium tracking-tight">
                 {format(currentDate, 'MMMM yyyy')}
               </CardTitle>
               <Button variant="ghost" size="icon" onClick={() => setCurrentDate(addMonths(currentDate, 1))}>
@@ -314,7 +337,7 @@ END:VCALENDAR`;
               {/* Weekday headers */}
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
+                  <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2 uppercase tracking-wider">
                     {day}
                   </div>
                 ))}
@@ -324,7 +347,7 @@ END:VCALENDAR`;
               <div className="grid grid-cols-7 gap-1">
                 {/* Empty cells for days before start of month */}
                 {Array.from({ length: days[0].getDay() }).map((_, i) => (
-                  <div key={`empty-${i}`} className="h-24 bg-muted/30 rounded-lg" />
+                  <div key={`empty-${i}`} className="h-24 bg-muted/20 rounded-lg" />
                 ))}
                 
                 {days.map((day) => {
@@ -334,25 +357,54 @@ END:VCALENDAR`;
                   return (
                     <div
                       key={day.toISOString()}
-                      className={`h-24 p-1 rounded-lg border transition-colors cursor-pointer hover:bg-accent/10 ${
-                        isToday ? 'border-primary bg-primary/5' : 'border-border'
-                      }`}
+                      className={`h-24 p-1.5 rounded-lg border transition-all duration-200 cursor-pointer group
+                        ${isToday 
+                          ? 'border-foreground/30 bg-foreground/5' 
+                          : 'border-border/50 hover:border-border hover:bg-muted/30'
+                        }
+                        hover:scale-[1.02] hover:shadow-md
+                      `}
                       onClick={() => setSelectedDate(day)}
                     >
-                      <div className={`text-sm font-medium mb-1 ${isToday ? 'text-primary' : ''}`}>
+                      <div className={`text-sm font-medium mb-1 ${isToday ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
                         {format(day, 'd')}
                       </div>
                       <div className="space-y-0.5 overflow-hidden">
                         {dayEvents.slice(0, 2).map((event) => (
-                          <div
-                            key={event.id}
-                            className={`text-xs px-1 py-0.5 rounded truncate text-white ${eventTypeColors[event.event_type]}`}
-                          >
-                            {event.title}
-                          </div>
+                          <Tooltip key={event.id}>
+                            <TooltipTrigger asChild>
+                              <div
+                                className={`text-xs px-1.5 py-0.5 rounded truncate text-white font-light cursor-pointer
+                                  ${eventTypeConfig[event.event_type]?.bg || 'bg-[#64748B]'}
+                                  transition-transform duration-200 hover:scale-105
+                                  animate-fade-in
+                                `}
+                              >
+                                {event.title}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-xs">
+                              <div className="space-y-1">
+                                <p className="font-medium">{event.title}</p>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {format(parseISO(event.start_time), 'h:mm a')}
+                                </div>
+                                {event.location && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <MapPin className="h-3 w-3" />
+                                    {event.location}
+                                  </div>
+                                )}
+                                {event.description && (
+                                  <p className="text-xs text-muted-foreground">{event.description}</p>
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         ))}
                         {dayEvents.length > 2 && (
-                          <div className="text-xs text-muted-foreground px-1">
+                          <div className="text-xs text-muted-foreground px-1 font-light">
                             +{dayEvents.length - 2} more
                           </div>
                         )}
@@ -365,13 +417,13 @@ END:VCALENDAR`;
           </Card>
 
           {/* Event Type Legend */}
-          <Card>
+          <Card className="glass-card">
             <CardContent className="py-4">
               <div className="flex flex-wrap gap-4">
-                {Object.entries(eventTypeColors).map(([type, color]) => (
+                {Object.entries(eventTypeConfig).map(([type, config]) => (
                   <div key={type} className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded ${color}`} />
-                    <span className="text-sm capitalize">{type}</span>
+                    <div className={`w-3 h-3 rounded-full ${config.bg}`} />
+                    <span className="text-sm font-light text-muted-foreground">{config.label}</span>
                   </div>
                 ))}
               </div>
@@ -382,7 +434,7 @@ END:VCALENDAR`;
           {!profile?.family_id && (
             <Card className="border-warning bg-warning/10">
               <CardContent className="py-4">
-                <p className="text-warning-foreground">
+                <p className="text-warning-foreground font-light">
                   You need to create or join a family to use the calendar. Go to Settings to set up your family.
                 </p>
               </CardContent>
