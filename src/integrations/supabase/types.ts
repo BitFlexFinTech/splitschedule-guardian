@@ -414,6 +414,33 @@ export type Database = {
           },
         ]
       }
+      custody_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_system: boolean | null
+          name: string
+          schedule_pattern: Json
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean | null
+          name: string
+          schedule_pattern?: Json
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean | null
+          name?: string
+          schedule_pattern?: Json
+        }
+        Relationships: []
+      }
       custody_transfers: {
         Row: {
           child_id: string | null
@@ -956,12 +983,15 @@ export type Database = {
           email: string
           family_id: string | null
           full_name: string | null
+          gdpr_consent_at: string | null
           id: string
           language: string | null
           notification_email: boolean | null
           notification_push: boolean | null
           notification_sms: boolean | null
+          onboarding_completed: boolean | null
           phone: string | null
+          preferred_currency: string | null
           timezone: string | null
           updated_at: string
           user_id: string
@@ -972,12 +1002,15 @@ export type Database = {
           email: string
           family_id?: string | null
           full_name?: string | null
+          gdpr_consent_at?: string | null
           id?: string
           language?: string | null
           notification_email?: boolean | null
           notification_push?: boolean | null
           notification_sms?: boolean | null
+          onboarding_completed?: boolean | null
           phone?: string | null
+          preferred_currency?: string | null
           timezone?: string | null
           updated_at?: string
           user_id: string
@@ -988,12 +1021,15 @@ export type Database = {
           email?: string
           family_id?: string | null
           full_name?: string | null
+          gdpr_consent_at?: string | null
           id?: string
           language?: string | null
           notification_email?: boolean | null
           notification_push?: boolean | null
           notification_sms?: boolean | null
+          onboarding_completed?: boolean | null
           phone?: string | null
+          preferred_currency?: string | null
           timezone?: string | null
           updated_at?: string
           user_id?: string
