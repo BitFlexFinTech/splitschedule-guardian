@@ -4,16 +4,19 @@ import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Eye, EyeOff, ArrowLeft, Zap } from "lucide-react";
+import { Calendar, Eye, EyeOff, ArrowLeft, Users, Scale, Shield, HeadphonesIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { DEMO_ACCOUNTS } from "@/lib/config";
+
+type DemoRole = keyof typeof DEMO_ACCOUNTS;
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [godModeLoading, setGodModeLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState<DemoRole | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -51,52 +54,85 @@ const Login = () => {
     }
   };
 
-  const handleGodMode = async () => {
-    setGodModeLoading(true);
+  const handleDemoLogin = async (role: DemoRole) => {
+    setDemoLoading(role);
+    const account = DEMO_ACCOUNTS[role];
+
     try {
       // First try to sign up the demo user (will fail if already exists, that's fine)
       await supabase.auth.signUp({
-        email: 'demo-parent@testsplitschedule.com',
-        password: 'Demo1234$$',
+        email: account.email,
+        password: account.password,
         options: {
-          data: { full_name: 'Demo Parent' }
+          data: { full_name: account.name }
         }
       });
 
       // Now sign in
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: 'demo-parent@testsplitschedule.com',
-        password: 'Demo1234$$',
+        email: account.email,
+        password: account.password,
       });
 
       if (error) {
         toast({
-          title: "GodMode failed",
+          title: "Demo login failed",
           description: error.message,
           variant: "destructive",
         });
-      } else {
-        // Seed demo data for this user
-        if (data.user) {
+        return;
+      }
+
+      if (data.user) {
+        // Ensure the role exists in user_roles
+        const { data: existingRole } = await supabase
+          .from('user_roles')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .eq('role', account.role)
+          .maybeSingle();
+
+        if (!existingRole) {
+          await supabase
+            .from('user_roles')
+            .upsert({ 
+              user_id: data.user.id, 
+              role: account.role 
+            }, { 
+              onConflict: 'user_id,role' 
+            });
+        }
+
+        // Seed demo data for parents
+        if (role === 'parent') {
           await supabase.rpc('seed_demo_data_for_user', { demo_user_id: data.user.id });
         }
-        
-        toast({
-          title: "GodMode Activated!",
-          description: "Welcome to the demo account with sample data.",
-        });
-        navigate("/dashboard");
       }
+
+      toast({
+        title: `${account.name} Mode Activated!`,
+        description: `Logged in as ${role}. Explore the ${role} dashboard.`,
+      });
+      
+      navigate(account.redirectTo);
     } catch (err) {
+      console.error('Demo login error:', err);
       toast({
         title: "Error",
         description: "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {
-      setGodModeLoading(false);
+      setDemoLoading(null);
     }
   };
+
+  const demoButtons = [
+    { role: 'parent' as DemoRole, icon: Users, label: 'Parent Demo', color: 'from-teal-500 to-cyan-500' },
+    { role: 'lawyer' as DemoRole, icon: Scale, label: 'Lawyer Demo', color: 'from-indigo-500 to-purple-500' },
+    { role: 'admin' as DemoRole, icon: Shield, label: 'Admin Demo', color: 'from-red-500 to-rose-500' },
+    { role: 'support' as DemoRole, icon: HeadphonesIcon, label: 'Support Demo', color: 'from-blue-500 to-sky-500' },
+  ];
 
   return (
     <>
@@ -190,21 +226,30 @@ const Login = () => {
                 <span className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or</span>
+                <span className="bg-background px-2 text-muted-foreground">Quick Demo Access</span>
               </div>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 hover:from-amber-600 hover:to-orange-600"
-              onClick={handleGodMode}
-              disabled={godModeLoading}
-            >
-              <Zap className="w-5 h-5 mr-2" />
-              {godModeLoading ? "Activating..." : "GodMode (Skip Login)"}
-            </Button>
+            {/* Demo Login Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              {demoButtons.map(({ role, icon: Icon, label, color }) => (
+                <Button
+                  key={role}
+                  type="button"
+                  variant="outline"
+                  className={`h-auto py-3 flex flex-col items-center gap-1 bg-gradient-to-r ${color} text-white border-0 hover:opacity-90`}
+                  onClick={() => handleDemoLogin(role)}
+                  disabled={demoLoading !== null}
+                >
+                  {demoLoading === role ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Icon className="w-5 h-5" />
+                  )}
+                  <span className="text-xs font-medium">{label}</span>
+                </Button>
+              ))}
+            </div>
 
             <p className="text-center text-muted-foreground mt-8">
               Don't have an account?{" "}
